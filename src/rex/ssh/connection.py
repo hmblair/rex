@@ -102,7 +102,7 @@ class SSHConnection:
 
         Returns list of (target, socket_path) tuples.
         """
-        active = []
+        active: list[tuple[str, str]] = []
         if not SOCKET_DIR.exists():
             return active
 

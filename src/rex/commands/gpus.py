@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from rex.ssh.executor import SSHExecutor
 
@@ -50,7 +51,7 @@ done
     code, proc_info, _ = ssh.exec(f"bash -c '{proc_script}'")
 
     # Parse process info into dict by GPU index
-    procs_by_gpu: dict[int, list[dict]] = {}
+    procs_by_gpu: dict[int, list[dict[str, Any]]] = {}
     for line in proc_info.strip().split("\n"):
         if not line:
             continue
@@ -66,7 +67,7 @@ done
             })
 
     # Parse GPU info
-    gpus = []
+    gpus: list[dict[str, Any]] = []
     for line in gpu_info.strip().split("\n"):
         if not line:
             continue
@@ -120,7 +121,7 @@ done
                 f"util: {gpu['utilization']:>3}%  {status_colored}"
             )
 
-            for proc in gpu["processes"]:
+            for proc in gpu["processes"]:  # type: ignore[attr-defined]
                 print(f"       └─ {proc['user']:<12} PID {proc['pid']:<8} {proc['memory']:>5}MB")
 
     return 0

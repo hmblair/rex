@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from typing import Any
 
 from rex.execution.base import Executor, JobResult, JobStatus
 from rex.output import error, info, success, warn
@@ -17,9 +18,9 @@ def list_jobs(
     jobs = executor.list_jobs(target)
 
     if json_output:
-        output = []
+        output: list[dict[str, Any]] = []
         for job in jobs:
-            item = {"job": job.job_id, "status": job.status}
+            item: dict[str, Any] = {"job": job.job_id, "status": job.status}
             if job.pid:
                 item["pid"] = job.pid
             if job.slurm_id:
@@ -47,12 +48,12 @@ def get_status(
     status = executor.get_status(target, job_id)
 
     if json_output:
-        output = {"job": status.job_id, "status": status.status}
+        out: dict[str, Any] = {"job": status.job_id, "status": status.status}
         if status.pid:
-            output["pid"] = status.pid
+            out["pid"] = status.pid
         if status.slurm_id:
-            output["slurm_id"] = status.slurm_id
-        print(json.dumps(output))
+            out["slurm_id"] = status.slurm_id
+        print(json.dumps(out))
     else:
         if status.status == "unknown":
             warn(f"Could not connect to {target}")

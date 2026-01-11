@@ -35,7 +35,7 @@ Repository = "https://github.com/hmblair/rex"
 rex = "rex.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-mock"]
+dev = ["pytest", "pytest-mock", "mypy", "typing_extensions"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

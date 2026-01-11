@@ -8,7 +8,7 @@ from pathlib import Path
 
 from rex import __version__
 from rex.config import ProjectConfig, expand_alias, load_aliases
-from rex.execution import DirectExecutor, ExecutionContext, SlurmExecutor, SlurmOptions
+from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
 from rex.output import error
 from rex.ssh import SSHExecutor, FileTransfer
 
@@ -182,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         partition = project.gpu_partition if use_gpu else project.cpu_partition
 
     # Create executor
+    executor: Executor
     if args.slurm:
         slurm_opts = SlurmOptions(
             partition=partition,
@@ -267,17 +268,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.push:
         transfer = FileTransfer(target, ssh)
-        local = Path(args.push[0])
-        remote = args.push[1] if len(args.push) > 1 else None
+        push_local = Path(args.push[0])
+        push_remote = args.push[1] if len(args.push) > 1 else None
         from rex.commands.transfer import push
-        return push(transfer, local, remote)
+        return push(transfer, push_local, push_remote)
 
     if args.pull:
         transfer = FileTransfer(target, ssh)
-        remote = args.pull[0]
-        local = Path(args.pull[1]) if len(args.pull) > 1 else None
+        pull_remote = args.pull[0]
+        pull_local = Path(args.pull[1]) if len(args.pull) > 1 else None
         from rex.commands.transfer import pull
-        return pull(transfer, remote, local)
+        return pull(transfer, pull_remote, pull_local)
 
     if args.sync is not None:
         transfer = FileTransfer(target, ssh)

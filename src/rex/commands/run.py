@@ -8,6 +8,7 @@ from pathlib import Path
 
 from rex.execution.base import ExecutionContext, Executor, JobInfo
 from rex.output import error
+from rex.utils import generate_job_name
 
 
 def run_python(
@@ -50,6 +51,7 @@ def run_python(
         return 1
 
     if detach:
-        return executor.run_detached(ctx, script, args, job_name)
+        name = job_name or generate_job_name()
+        return executor.run_detached(ctx, script, args, name)
     else:
         return executor.run_foreground(ctx, script, args)
