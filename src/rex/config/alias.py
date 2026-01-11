@@ -1,5 +1,7 @@
 """Alias file parsing (~/.config/rex)."""
 
+from __future__ import annotations
+
 import re
 import shlex
 from dataclasses import dataclass

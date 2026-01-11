@@ -1,5 +1,7 @@
 """Build command for remote venv setup."""
 
+from __future__ import annotations
+
 import time
 
 from rex.config.project import ProjectConfig

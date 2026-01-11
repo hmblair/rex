@@ -1,5 +1,7 @@
 """GPU monitoring command."""
 
+from __future__ import annotations
+
 import json
 
 from rex.ssh.executor import SSHExecutor

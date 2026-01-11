@@ -1,5 +1,7 @@
 """File transfer operations (rsync, scp)."""
 
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
 

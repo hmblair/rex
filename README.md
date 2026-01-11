@@ -14,7 +14,7 @@ Remote execution tool for Python and shell commands on HPC clusters.
 
 ## Installation
 
-Requires Python 3.11+.
+Requires Python 3.9+.
 
 ```bash
 pip install -e .

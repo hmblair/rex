@@ -1,6 +1,8 @@
 """Project configuration (.rex.toml parsing)."""
 
-import tomllib
+from __future__ import annotations
+
+import tomli
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -56,7 +58,7 @@ class ProjectConfig:
     def _load(cls, path: Path) -> "ProjectConfig":
         """Load config from a specific path."""
         with open(path, "rb") as f:
-            data = tomllib.load(f)
+            data = tomli.load(f)
 
         # Warn about unknown fields
         unknown = set(data.keys()) - KNOWN_FIELDS

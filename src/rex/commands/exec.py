@@ -1,5 +1,7 @@
 """Shell command execution."""
 
+from __future__ import annotations
+
 from rex.execution.base import ExecutionContext, Executor, JobInfo
 
 

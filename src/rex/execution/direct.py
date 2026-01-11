@@ -1,5 +1,7 @@
 """Direct SSH execution (non-SLURM)."""
 
+from __future__ import annotations
+
 import time
 from pathlib import Path
 

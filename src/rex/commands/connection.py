@@ -1,5 +1,7 @@
 """Connection management commands."""
 
+from __future__ import annotations
+
 from rex.ssh.connection import SSHConnection
 
 

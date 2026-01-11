@@ -1,5 +1,7 @@
 """Colored output utilities."""
 
+from __future__ import annotations
+
 import sys
 
 # ANSI color codes
