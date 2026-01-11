@@ -65,12 +65,12 @@ Examples:
     parser.add_argument("--gpu", action="store_true", help="Use GPU partition")
     parser.add_argument("--cpu", action="store_true", help="Use CPU partition (override)")
 
-    # Commands
+    # Commands (nargs="?" allows --cmd --last without specifying job)
     parser.add_argument("--jobs", action="store_true", help="List jobs")
-    parser.add_argument("--status", metavar="JOB", help="Check job status")
-    parser.add_argument("--log", metavar="JOB", help="Show job log")
-    parser.add_argument("--kill", metavar="JOB", help="Kill job")
-    parser.add_argument("--watch", metavar="JOB", help="Wait for job")
+    parser.add_argument("--status", nargs="?", const="--last", metavar="JOB", help="Check job status")
+    parser.add_argument("--log", nargs="?", const="--last", metavar="JOB", help="Show job log")
+    parser.add_argument("--kill", nargs="?", const="--last", metavar="JOB", help="Kill job")
+    parser.add_argument("--watch", nargs="?", const="--last", metavar="JOB", help="Wait for job")
     parser.add_argument("--gpu-info", action="store_true", dest="gpu_info", help="Show GPU info")
 
     parser.add_argument("--push", nargs="+", metavar="PATH", help="Push files")
