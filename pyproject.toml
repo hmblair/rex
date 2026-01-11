@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "rex"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Remote execution tool for Python and shell commands"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -17,3 +17,10 @@ dev = ["pytest", "pytest-mock"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+tag_regex = "^v(?P<version>.*)$"
+write_to = "src/rex/_version.py"
+fallback_version = "0.0.0.dev0"

@@ -4,10 +4,14 @@ import argparse
 import sys
 from pathlib import Path
 
+from rex import __version__
 from rex.config import ProjectConfig, expand_alias, load_aliases
 from rex.execution import DirectExecutor, ExecutionContext, SlurmExecutor, SlurmOptions
 from rex.output import error
-from rex.ssh import SSHConnection, SSHExecutor, FileTransfer
+from rex.ssh import SSHExecutor, FileTransfer
+
+# Global debug flag
+DEBUG = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="rex",
         description="Remote execution tool for Python and shell commands",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=True,
         epilog="""
 Examples:
   rex gpu train.py                    # run on login node
@@ -33,6 +38,9 @@ Examples:
   rex gpu --disconnect                # close connection when done
 """,
     )
+
+    # Version
+    parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
 
     # Target
     parser.add_argument("target", nargs="?", help="alias or user@host")
@@ -60,7 +68,7 @@ Examples:
     parser.add_argument("--log", metavar="JOB", help="Show job log")
     parser.add_argument("--kill", metavar="JOB", help="Kill job")
     parser.add_argument("--watch", metavar="JOB", help="Wait for job")
-    parser.add_argument("--gpus-info", action="store_true", dest="gpus_info", help="Show GPU info")
+    parser.add_argument("--gpu-info", action="store_true", dest="gpu_info", help="Show GPU info")
 
     parser.add_argument("--push", nargs="+", metavar="PATH", help="Push files")
     parser.add_argument("--pull", nargs="+", metavar="PATH", help="Pull files")
@@ -141,8 +149,12 @@ def main(argv: list[str] | None = None) -> int:
             if i + 1 < len(extra_args):
                 args.modules.append(extra_args[i + 1])
 
+    # Set debug mode
+    global DEBUG
+    DEBUG = args.debug
+
     # Create SSH executor
-    ssh = SSHExecutor(target)
+    ssh = SSHExecutor(target, verbose=args.debug)
 
     # Apply project defaults
     if project:
@@ -245,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         return watch_job(executor, target, job_id, args.json)
 
-    if args.gpus_info:
+    if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus
         if args.slurm:
             return show_slurm_gpus(ssh, args.partition)

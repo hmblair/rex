@@ -10,8 +10,9 @@ SOCKET_DIR = Path.home() / ".ssh" / "controlmasters"
 class SSHExecutor:
     """Execute commands on remote host via SSH."""
 
-    def __init__(self, target: str):
+    def __init__(self, target: str, verbose: bool = False):
         self.target = target
+        self.verbose = verbose
         self._opts = self._build_opts()
 
     def _socket_path(self) -> Path:
@@ -20,11 +21,16 @@ class SSHExecutor:
 
     def _build_opts(self) -> list[str]:
         """Build SSH options list."""
-        opts = [
+        opts = []
+
+        if self.verbose:
+            opts.append("-v")
+
+        opts.extend([
             "-o", "ConnectTimeout=10",
             "-o", "ServerAliveInterval=60",
             "-o", "ServerAliveCountMax=3",
-        ]
+        ])
 
         socket = self._socket_path()
         opts.extend([

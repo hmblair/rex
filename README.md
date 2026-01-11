@@ -110,7 +110,7 @@ rex --build --gpu       # builds on gpu_partition
 | `rex host --log JOB [-f]` | Show job log (follow with -f) |
 | `rex host --kill JOB` | Kill job |
 | `rex host --watch JOB` | Wait for job completion |
-| `rex host --gpus-info` | Show GPU utilization |
+| `rex host --gpu-info` | Show GPU utilization |
 | `rex host --push local [remote]` | Upload files |
 | `rex host --pull remote [local]` | Download files |
 | `rex host --sync [path]` | Rsync project |
@@ -123,6 +123,7 @@ rex --build --gpu       # builds on gpu_partition
 
 | Option | Description |
 |--------|-------------|
+| `-V, --version` | Show version |
 | `-d, --detach` | Run in background |
 | `-s, --slurm` | Use SLURM scheduler |
 | `-n, --name NAME` | Job name for detached jobs |
@@ -136,6 +137,23 @@ rex --build --gpu       # builds on gpu_partition
 | `--time LIMIT` | SLURM time limit |
 | `--last` | Use most recent job |
 | `--json` | JSON output |
+| `--debug` | Enable verbose SSH output |
+
+## Shell Completions
+
+Zsh completions are provided in `completions/_rex`. To install:
+
+```bash
+# Copy to your zsh completions directory
+cp completions/_rex ~/.zsh/completions/
+
+# Or symlink
+ln -s $(pwd)/completions/_rex ~/.zsh/completions/_rex
+
+# Then add to your .zshrc (if not already):
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+```
 
 ## License
 
