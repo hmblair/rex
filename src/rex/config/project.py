@@ -17,6 +17,7 @@ KNOWN_FIELDS = {
     "gpu_partition",
     "gres",
     "time",
+    "cpus",
     "default_gpu",
 }
 
@@ -34,6 +35,7 @@ class ProjectConfig:
     gpu_partition: str | None = None
     gres: str | None = None
     time: str | None = None
+    cpus: int | None = None
     default_gpu: bool = False
 
     @classmethod
@@ -75,5 +77,6 @@ class ProjectConfig:
             gpu_partition=data.get("gpu_partition"),
             gres=data.get("gres"),
             time=data.get("time"),
+            cpus=data.get("cpus"),
             default_gpu=data.get("default_gpu", False),
         )

@@ -20,6 +20,7 @@ class SlurmOptions:
     partition: str | None = None
     gres: str | None = None
     time: str | None = None
+    cpus: int | None = None
 
 
 class SlurmExecutor:
@@ -42,6 +43,8 @@ class SlurmExecutor:
             opts += f" --gres={self.options.gres}"
         if self.options.time:
             opts += f" --time={self.options.time}"
+        if self.options.cpus:
+            opts += f" --cpus-per-task={self.options.cpus}"
         return opts
 
     def run_foreground(
