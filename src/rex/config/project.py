@@ -18,6 +18,7 @@ KNOWN_FIELDS = {
     "gres",
     "time",
     "cpus",
+    "constraint",
     "default_gpu",
 }
 
@@ -36,6 +37,7 @@ class ProjectConfig:
     gres: str | None = None
     time: str | None = None
     cpus: int | None = None
+    constraint: str | None = None
     default_gpu: bool = False
 
     @classmethod
@@ -78,5 +80,6 @@ class ProjectConfig:
             gres=data.get("gres"),
             time=data.get("time"),
             cpus=data.get("cpus"),
+            constraint=data.get("constraint"),
             default_gpu=data.get("default_gpu", False),
         )
