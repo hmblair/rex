@@ -55,7 +55,7 @@ class DirectExecutor:
         wrapper = builder.build()
 
         # Execute via script method
-        exit_code = self.ssh.exec_script_streaming(wrapper, tty=True)
+        exit_code = self.ssh.exec_script_streaming(wrapper, tty=None)
 
         # Cleanup
         self.ssh.exec(f"rm -f {remote_py} {remote_sh}")
@@ -142,7 +142,7 @@ class DirectExecutor:
         # Build script for login shell execution
         script = ScriptBuilder().shebang(login=True).run_command(full_cmd).build()
 
-        return self.ssh.exec_script_streaming(script, login_shell=True, tty=True)
+        return self.ssh.exec_script_streaming(script, login_shell=True, tty=None)
 
     def exec_detached(
         self, ctx: ExecutionContext, cmd: str, job_name: str | None = None

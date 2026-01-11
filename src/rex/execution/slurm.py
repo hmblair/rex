@@ -91,7 +91,7 @@ class SlurmExecutor:
         slurm_opts = self._build_slurm_opts()
         exit_code = self.ssh.exec_streaming(
             f"srun{slurm_opts} {remote_sh}; _e=$?; rm -f {remote_py} {remote_sh}; exit $_e",
-            tty=True,
+            tty=None,
         )
 
         return exit_code
@@ -233,7 +233,7 @@ class SlurmExecutor:
         slurm_opts = self._build_slurm_opts()
         exit_code = self.ssh.exec_streaming(
             f"srun{slurm_opts} {remote_script}; _e=$?; rm -f {remote_script}; exit $_e",
-            tty=True,
+            tty=None,
         )
 
         return exit_code
