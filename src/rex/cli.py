@@ -11,6 +11,7 @@ from rex.config import ProjectConfig, expand_alias, load_aliases
 from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
 from rex.output import error
 from rex.ssh import SSHExecutor, FileTransfer
+from rex.utils import validate_job_name
 
 # Global debug flag
 DEBUG = False
@@ -103,7 +104,7 @@ Examples:
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_intermixed_args(argv)
 
     # Special case: --connection without target lists all
     if args.connection and not args.target:
@@ -135,14 +136,15 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
 
-    # Apply extra args from alias
+    # Apply extra args from alias (store partition separately so --gpu/--cpu can override)
+    alias_partition = None
     for i, arg in enumerate(extra_args):
         if arg == "-p" and i + 1 < len(extra_args):
             args.python = extra_args[i + 1]
         elif arg == "-s" or arg == "--slurm":
             args.slurm = True
         elif arg == "--partition" and i + 1 < len(extra_args):
-            args.partition = args.partition or extra_args[i + 1]
+            alias_partition = extra_args[i + 1]
         elif arg == "--gres" and i + 1 < len(extra_args):
             args.gres = args.gres or extra_args[i + 1]
         elif arg == "--time" and i + 1 < len(extra_args):
@@ -168,18 +170,20 @@ def main(argv: list[str] | None = None) -> int:
             args.time = project.time
 
     # Determine partition based on --gpu/--cpu flags
-    # Priority: --partition > --cpu > --gpu > project.default_gpu > cpu
+    # Priority: user --partition > --gpu/--cpu > alias partition > default_gpu > cpu
     partition = args.partition
-    if not partition and project:
-        use_gpu = False
-        if args.cpu:
-            use_gpu = False
-        elif args.gpu:
-            use_gpu = True
-        elif project.default_gpu:
-            use_gpu = True
-
-        partition = project.gpu_partition if use_gpu else project.cpu_partition
+    if not partition:
+        if args.gpu and project and project.gpu_partition:
+            partition = project.gpu_partition
+        elif args.cpu and project and project.cpu_partition:
+            partition = project.cpu_partition
+        elif alias_partition:
+            partition = alias_partition
+        elif project:
+            if project.default_gpu:
+                partition = project.gpu_partition
+            else:
+                partition = project.cpu_partition
 
     # Create executor
     executor: Executor
@@ -202,6 +206,13 @@ def main(argv: list[str] | None = None) -> int:
         code_dir=project.code_dir if project else None,
         run_dir=project.run_dir if project else None,
     )
+
+    # Validate job name if provided
+    if args.name:
+        try:
+            validate_job_name(args.name)
+        except ValueError as e:
+            error(str(e))
 
     # Dispatch commands
     if args.connect:

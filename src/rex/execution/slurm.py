@@ -110,6 +110,9 @@ class SlurmExecutor:
         # Get remote home for absolute paths
         code, stdout, _ = self.ssh.exec("echo $HOME")
         remote_home = stdout.strip()
+        if not remote_home:
+            warn("Failed to get remote home directory")
+            return JobInfo(job_id=job_name, log_path="", is_slurm=True, slurm_id=None)
         remote_dir = f"{remote_home}/.rex"
         remote_script = f"{remote_dir}/rex-{job_name}.py"
         remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
@@ -173,10 +176,23 @@ class SlurmExecutor:
         )
 
         # Submit job
-        code, stdout, _ = self.ssh.exec(f"sbatch --parsable {remote_sbatch}")
-        slurm_id = int(stdout.strip()) if stdout.strip() else None
+        code, stdout, stderr = self.ssh.exec(f"sbatch --parsable {remote_sbatch}")
+        if code != 0 or not stdout.strip():
+            err_msg = stderr.strip() or stdout.strip() or "unknown error"
+            warn(f"sbatch failed: {err_msg}")
+            return JobInfo(
+                job_id=job_name,
+                log_path=remote_log,
+                is_slurm=True,
+                slurm_id=None,
+            )
 
+        slurm_id = int(stdout.strip())
+        target = self.ssh.target
         success(f"Submitted: {job_name} (SLURM {slurm_id})")
+        print(f"Status: rex {target} --status {job_name}")
+        print(f"Log:    rex {target} --log {job_name}")
+        print(f"Kill:   rex {target} --kill {job_name}")
         return JobInfo(
             job_id=job_name,
             log_path=remote_log,
@@ -232,6 +248,9 @@ class SlurmExecutor:
         # Get remote home
         code, stdout, _ = self.ssh.exec("echo $HOME")
         remote_home = stdout.strip()
+        if not remote_home:
+            warn("Failed to get remote home directory")
+            return JobInfo(job_id=job_name, log_path="", is_slurm=True, slurm_id=None)
         remote_dir = f"{remote_home}/.rex"
         remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
         remote_log = f"{remote_dir}/rex-{job_name}.log"
@@ -284,10 +303,22 @@ class SlurmExecutor:
             check=True,
         )
 
-        code, stdout, _ = self.ssh.exec(f"sbatch --parsable {remote_sbatch}")
-        slurm_id = int(stdout.strip()) if stdout.strip() else None
+        code, stdout, stderr = self.ssh.exec(f"sbatch --parsable {remote_sbatch}")
+        if code != 0 or not stdout.strip():
+            err_msg = stderr.strip() or stdout.strip() or "unknown error"
+            warn(f"sbatch failed: {err_msg}")
+            return JobInfo(
+                job_id=job_name,
+                log_path=remote_log,
+                is_slurm=True,
+                slurm_id=None,
+            )
 
+        slurm_id = int(stdout.strip())
+        target = self.ssh.target
         success(f"Submitted: {job_name} (SLURM {slurm_id})")
+        print(f"Log:    rex {target} --log {job_name}")
+        print(f"Kill:   rex {target} --kill {job_name}")
         return JobInfo(
             job_id=job_name,
             log_path=remote_log,

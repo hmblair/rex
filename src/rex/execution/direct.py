@@ -112,7 +112,11 @@ class DirectExecutor:
         code, stdout, _ = self.ssh.exec(cmd)
         pid = int(stdout.strip()) if stdout.strip() else None
 
+        target = self.ssh.target
         success(f"Detached: {job_name} (PID {pid})")
+        print(f"Status: rex {target} --status {job_name}")
+        print(f"Log:    rex {target} --log {job_name}")
+        print(f"Kill:   rex {target} --kill {job_name}")
         return JobInfo(
             job_id=job_name,
             log_path=remote_log,
@@ -174,7 +178,10 @@ class DirectExecutor:
         code, stdout, _ = self.ssh.exec(ssh_cmd)
         pid = int(stdout.strip()) if stdout.strip() else None
 
+        target = self.ssh.target
         success(f"Detached: {job_name} (PID {pid})")
+        print(f"Log:    rex {target} --log {job_name}")
+        print(f"Kill:   rex {target} --kill {job_name}")
         return JobInfo(
             job_id=job_name,
             log_path=remote_log,
