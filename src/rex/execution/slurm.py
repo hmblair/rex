@@ -22,6 +22,7 @@ class SlurmOptions:
     time: str | None = None
     cpus: int | None = None
     constraint: str | None = None
+    prefer: str | None = None
 
 
 class SlurmExecutor:
@@ -48,6 +49,8 @@ class SlurmExecutor:
             opts += f" --cpus-per-task={self.options.cpus}"
         if self.options.constraint:
             opts += f" --constraint={self.options.constraint}"
+        if self.options.prefer:
+            opts += f" --prefer={self.options.prefer}"
         return opts
 
     def run_foreground(

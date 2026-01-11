@@ -64,6 +64,7 @@ Examples:
     parser.add_argument("--time", help="SLURM time limit")
     parser.add_argument("--cpus", type=int, help="SLURM CPUs per task")
     parser.add_argument("--constraint", help="SLURM node constraint")
+    parser.add_argument("--prefer", help="SLURM node preference (soft constraint)")
     parser.add_argument("--gpu", action="store_true", help="Use GPU partition")
     parser.add_argument("--cpu", action="store_true", help="Use CPU partition (override)")
 
@@ -172,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
             args.cpus = project.cpus
         if not args.constraint and project.constraint:
             args.constraint = project.constraint
+        if not args.prefer and project.prefer:
+            args.prefer = project.prefer
 
     # Determine partition based on --gpu/--cpu flags
     # Priority: user --partition > --gpu/--cpu > alias partition > default_gpu > cpu
@@ -207,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             time=args.time,
             cpus=args.cpus,
             constraint=args.constraint,
+            prefer=args.prefer,
         )
         executor = SlurmExecutor(ssh, slurm_opts)
     else:
