@@ -164,33 +164,40 @@ def main(argv: list[str] | None = None) -> int:
     if project:
         if not args.modules and project.modules:
             args.modules = project.modules
-        if not args.gres and project.gres:
-            args.gres = project.gres
         if not args.time and project.time:
             args.time = project.time
 
     # Determine partition based on --gpu/--cpu flags
     # Priority: user --partition > --gpu/--cpu > alias partition > default_gpu > cpu
     partition = args.partition
+    use_gpu = False
     if not partition:
         if args.gpu and project and project.gpu_partition:
             partition = project.gpu_partition
+            use_gpu = True
         elif args.cpu and project and project.cpu_partition:
             partition = project.cpu_partition
         elif alias_partition:
             partition = alias_partition
+            # Alias partition is CPU by default (user passes --gpu to override)
         elif project:
             if project.default_gpu:
                 partition = project.gpu_partition
+                use_gpu = True
             else:
                 partition = project.cpu_partition
+
+    # Only apply gres from config if using GPU partition
+    gres = args.gres
+    if not gres and use_gpu and project and project.gres:
+        gres = project.gres
 
     # Create executor
     executor: Executor
     if args.slurm:
         slurm_opts = SlurmOptions(
             partition=partition,
-            gres=args.gres,
+            gres=gres,
             time=args.time,
         )
         executor = SlurmExecutor(ssh, slurm_opts)
