@@ -60,7 +60,7 @@ Define shortcuts for frequently used hosts:
 
 ```
 gpu = user@gpu.server.com -p /opt/python3.12
-sherlock = user@login.sherlock.stanford.edu --slurm --partition gpu --gres gpu:1
+cluster = user@login.cluster.edu --slurm --partition gpu --gres gpu:1
 ```
 
 Then use: `rex gpu train.py`

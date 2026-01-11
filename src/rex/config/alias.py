@@ -22,7 +22,7 @@ def load_aliases(path: Path | None = None) -> dict[str, Alias]:
 
     Format:
         name = user@host [options...]
-        gpu = hmblair@gpu.server.com -p /opt/python3.12
+        gpu = user@gpu.example.com -p /opt/python3.12
     """
     if path is None:
         path = DEFAULT_CONFIG_PATH
