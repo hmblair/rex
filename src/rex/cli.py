@@ -10,7 +10,7 @@ from rex import __version__
 from rex.config import ProjectConfig, expand_alias, load_aliases
 from rex.exceptions import RexError, ValidationError, ConfigError
 from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
-from rex.output import error
+from rex.output import error, setup_logging
 from rex.ssh import SSHExecutor, FileTransfer
 from rex.utils import (
     validate_job_name,
@@ -179,6 +179,7 @@ def _main(argv: list[str] | None = None) -> int:
     # Set debug mode
     global DEBUG
     DEBUG = args.debug
+    setup_logging(debug=args.debug)
 
     # Create SSH executor
     ssh = SSHExecutor(target, verbose=args.debug)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
 from rex.execution.script import SbatchBuilder, ScriptBuilder
-from rex.output import success, warn
+from rex.output import debug, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id
 
@@ -54,12 +54,15 @@ class SlurmExecutor:
             opts += f" --constraint={self.options.constraint}"
         if self.options.prefer:
             opts += f" --prefer={self.options.prefer}"
+        if opts:
+            debug(f"[slurm] options:{opts}")
         return opts
 
     def run_foreground(
         self, ctx: ExecutionContext, script_path: Path, args: list[str]
     ) -> int:
         """Run Python script via srun with streaming output."""
+        debug(f"[slurm] run_foreground: {script_path}")
         script_id = generate_script_id()
         script_dir = ctx.run_dir or "$HOME/.rex"
         remote_py = f"{script_dir}/rex-run-{script_id}.py"
@@ -118,6 +121,7 @@ class SlurmExecutor:
         """Run Python script via sbatch."""
         if job_name is None:
             job_name = generate_job_name()
+        debug(f"[slurm] run_detached: {script_path} as {job_name}")
 
         # Get remote home for absolute paths
         code, stdout, _ = self.ssh.exec("echo $HOME")
@@ -224,6 +228,7 @@ class SlurmExecutor:
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command via srun."""
+        debug(f"[slurm] exec_foreground: {cmd[:80]}{'...' if len(cmd) > 80 else ''}")
         script_id = generate_script_id()
         script_dir = ctx.run_dir or "$HOME/.rex"
         remote_script = f"{script_dir}/rex-exec-{script_id}.sh"
@@ -266,6 +271,7 @@ class SlurmExecutor:
         """Execute shell command via sbatch."""
         if job_name is None:
             job_name = generate_job_name()
+        debug(f"[slurm] exec_detached: {cmd[:80]}{'...' if len(cmd) > 80 else ''} as {job_name}")
 
         # Get remote home
         code, stdout, _ = self.ssh.exec("echo $HOME")

@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from rex.output import debug
+
 SOCKET_DIR = Path.home() / ".ssh" / "controlmasters"
 
 
@@ -47,6 +49,8 @@ class SSHExecutor:
 
         Returns (exit_code, stdout, stderr).
         """
+        debug(f"[ssh] exec: {cmd[:100]}{'...' if len(cmd) > 100 else ''}")
+
         # Use bash --norc --noprofile to skip slow startup scripts
         wrapped = f'bash --norc --noprofile -c {_shell_quote(cmd)}'
 
@@ -56,6 +60,7 @@ class SSHExecutor:
             text=True,
         )
 
+        debug(f"[ssh] exit={result.returncode}")
         return (result.returncode, result.stdout, result.stderr)
 
     def exec_streaming(self, cmd: str, *, tty: bool | None = None) -> int:
@@ -66,6 +71,8 @@ class SSHExecutor:
 
         Returns exit code.
         """
+        debug(f"[ssh] exec_streaming: {cmd[:100]}{'...' if len(cmd) > 100 else ''}")
+
         if tty is None:
             tty = sys.stdin.isatty()
 
@@ -77,6 +84,7 @@ class SSHExecutor:
         ssh_args.extend([self.target, wrapped])
 
         result = subprocess.run(ssh_args)
+        debug(f"[ssh] exit={result.returncode}")
         return result.returncode
 
     def exec_script(
@@ -93,6 +101,8 @@ class SSHExecutor:
 
         Returns exit code.
         """
+        debug(f"[ssh] exec_script: {len(script)} bytes, login_shell={login_shell}")
+
         shell = "bash -l" if login_shell else "bash"
 
         # Pattern: write to temp, execute, cleanup in one session
@@ -108,6 +118,7 @@ class SSHExecutor:
         ssh_args.extend([self.target, wrapper])
 
         result = subprocess.run(ssh_args, input=script.encode())
+        debug(f"[ssh] exit={result.returncode}")
         return result.returncode
 
     def exec_script_streaming(
@@ -121,6 +132,8 @@ class SSHExecutor:
 
         Like exec_script but inherits stdio for interactive use.
         """
+        debug(f"[ssh] exec_script_streaming: {len(script)} bytes, login_shell={login_shell}")
+
         if tty is None:
             tty = sys.stdin.isatty()
 
@@ -146,6 +159,7 @@ class SSHExecutor:
             stderr=None,  # Inherit
         )
         proc.communicate(input=script.encode())
+        debug(f"[ssh] exit={proc.returncode}")
         return proc.returncode
 
 
