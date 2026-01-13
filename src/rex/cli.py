@@ -328,7 +328,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus
         if args.slurm:
-            return show_slurm_gpus(ssh, args.partition)
+            return show_slurm_gpus(ssh, partition)
         return show_gpus(ssh, target, args.json)
 
     if args.push:
