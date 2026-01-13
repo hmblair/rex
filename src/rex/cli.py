@@ -12,7 +12,14 @@ from rex.exceptions import RexError, ValidationError, ConfigError
 from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
 from rex.output import error
 from rex.ssh import SSHExecutor, FileTransfer
-from rex.utils import validate_job_name
+from rex.utils import (
+    validate_job_name,
+    validate_slurm_time,
+    validate_memory,
+    validate_gres,
+    validate_cpus,
+    validate_gpus,
+)
 
 # Global debug flag
 DEBUG = False
@@ -248,6 +255,21 @@ def _main(argv: list[str] | None = None) -> int:
             validate_job_name(args.name)
         except ValueError as e:
             raise ValidationError(str(e))
+
+    # Validate SLURM options
+    try:
+        if args.time:
+            validate_slurm_time(args.time)
+        if args.mem:
+            validate_memory(args.mem)
+        if gres:
+            validate_gres(gres)
+        if args.cpus:
+            validate_cpus(args.cpus)
+        if args.gpus:
+            validate_gpus(args.gpus)
+    except ValueError as e:
+        raise ValidationError(str(e))
 
     # Dispatch commands
     if args.connect:

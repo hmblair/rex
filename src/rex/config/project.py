@@ -6,7 +6,9 @@ import tomli
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rex.exceptions import ConfigError
 from rex.output import warn
+from rex.utils import validate_slurm_time, validate_memory, validate_gres, validate_cpus
 
 KNOWN_FIELDS = {
     "host",
@@ -72,6 +74,19 @@ class ProjectConfig:
         unknown = set(data.keys()) - KNOWN_FIELDS
         if unknown:
             warn(f".rex.toml: unknown fields: {', '.join(sorted(unknown))}")
+
+        # Validate SLURM options
+        try:
+            if data.get("time"):
+                validate_slurm_time(data["time"])
+            if data.get("mem"):
+                validate_memory(data["mem"])
+            if data.get("gres"):
+                validate_gres(data["gres"])
+            if data.get("cpus"):
+                validate_cpus(data["cpus"])
+        except ValueError as e:
+            raise ConfigError(f".rex.toml: {e}")
 
         return cls(
             root=path.parent,

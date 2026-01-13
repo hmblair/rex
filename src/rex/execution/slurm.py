@@ -199,7 +199,17 @@ class SlurmExecutor:
                 slurm_id=None,
             )
 
-        slurm_id = int(stdout.strip())
+        try:
+            slurm_id = int(stdout.strip())
+        except ValueError:
+            warn(f"sbatch returned unexpected output: {stdout.strip()}")
+            return JobInfo(
+                job_id=job_name,
+                log_path=remote_log,
+                is_slurm=True,
+                slurm_id=None,
+            )
+
         target = self.ssh.target
         success(f"Submitted: {job_name} (SLURM {slurm_id})")
         print(f"Status: rex {target} --status {job_name}")
@@ -326,7 +336,17 @@ class SlurmExecutor:
                 slurm_id=None,
             )
 
-        slurm_id = int(stdout.strip())
+        try:
+            slurm_id = int(stdout.strip())
+        except ValueError:
+            warn(f"sbatch returned unexpected output: {stdout.strip()}")
+            return JobInfo(
+                job_id=job_name,
+                log_path=remote_log,
+                is_slurm=True,
+                slurm_id=None,
+            )
+
         target = self.ssh.target
         success(f"Submitted: {job_name} (SLURM {slurm_id})")
         print(f"Log:    rex {target} --log {job_name}")
@@ -350,7 +370,10 @@ class SlurmExecutor:
                 continue
             parts = line.split()
             if len(parts) >= 3:
-                slurm_id = int(parts[0])
+                try:
+                    slurm_id = int(parts[0])
+                except ValueError:
+                    continue  # Skip malformed lines
                 name = parts[1]
                 status = parts[2].lower()
                 # Extract job_id from name (rex-<job_id>)
