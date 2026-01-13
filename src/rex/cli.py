@@ -160,23 +160,6 @@ def _main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
 
-    # Apply extra args from alias (store partition separately so --gpu/--cpu can override)
-    alias_partition = None
-    for i, arg in enumerate(extra_args):
-        if arg == "-p" and i + 1 < len(extra_args):
-            args.python = extra_args[i + 1]
-        elif arg == "-s" or arg == "--slurm":
-            args.slurm = True
-        elif arg == "--partition" and i + 1 < len(extra_args):
-            alias_partition = extra_args[i + 1]
-        elif arg == "--gres" and i + 1 < len(extra_args):
-            args.gres = args.gres or extra_args[i + 1]
-        elif arg == "--time" and i + 1 < len(extra_args):
-            args.time = args.time or extra_args[i + 1]
-        elif arg == "-m" or arg == "--module":
-            if i + 1 < len(extra_args):
-                args.modules.append(extra_args[i + 1])
-
     # Set debug mode
     global DEBUG
     DEBUG = args.debug
@@ -185,7 +168,7 @@ def _main(argv: list[str] | None = None) -> int:
     # Create SSH executor
     ssh = SSHExecutor(target, verbose=args.debug)
 
-    # Apply project defaults
+    # Apply project defaults (priority: CLI > project > alias)
     if project:
         if not args.modules and project.modules:
             args.modules = project.modules
@@ -199,6 +182,23 @@ def _main(argv: list[str] | None = None) -> int:
             args.constraint = project.constraint
         if not args.prefer and project.prefer:
             args.prefer = project.prefer
+
+    # Apply extra args from alias as fallback (store partition separately so --gpu/--cpu can override)
+    alias_partition = None
+    for i, arg in enumerate(extra_args):
+        if arg == "-p" and i + 1 < len(extra_args):
+            args.python = args.python or extra_args[i + 1]
+        elif arg == "-s" or arg == "--slurm":
+            args.slurm = True
+        elif arg == "--partition" and i + 1 < len(extra_args):
+            alias_partition = extra_args[i + 1]
+        elif arg == "--gres" and i + 1 < len(extra_args):
+            args.gres = args.gres or extra_args[i + 1]
+        elif arg == "--time" and i + 1 < len(extra_args):
+            args.time = args.time or extra_args[i + 1]
+        elif arg == "-m" or arg == "--module":
+            if i + 1 < len(extra_args):
+                args.modules.append(extra_args[i + 1])
 
     # Determine partition based on --gpu/--cpu flags
     # Priority: user --partition > --gpu/--cpu > alias partition > default_gpu > cpu
