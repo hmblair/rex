@@ -6,8 +6,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from rex.exceptions import ValidationError
 from rex.execution.base import ExecutionContext, Executor, JobInfo
-from rex.output import error
 from rex.utils import generate_job_name
 
 
@@ -23,23 +23,27 @@ def run_python(
 
     If script is None, reads from stdin.
     Returns exit code for foreground, JobInfo for detached.
+
+    Raises:
+        ValidationError: If input validation fails.
     """
     # Handle stdin input
     temp_script: Path | None = None
     if script is None:
         if sys.stdin.isatty():
-            error("No input file and stdin is a terminal. Provide a file or pipe input.")
-            return 1
+            raise ValidationError(
+                "No input file and stdin is a terminal. Provide a file or pipe input."
+            )
 
         # Read stdin to temp file
         content = sys.stdin.read()
         if not content.strip():
-            error("No input file and stdin is empty. Provide a file or pipe input.")
-            return 1
+            raise ValidationError(
+                "No input file and stdin is empty. Provide a file or pipe input."
+            )
 
         if detach:
-            error("-d requires a file (cannot detach piped input)")
-            return 1
+            raise ValidationError("-d requires a file (cannot detach piped input)")
 
         # Write to temp file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -49,8 +53,7 @@ def run_python(
 
     # Validate script exists
     if not script.exists():
-        error(f"Script not found: {script}")
-        return 1
+        raise ValidationError(f"Script not found: {script}")
 
     try:
         if detach:

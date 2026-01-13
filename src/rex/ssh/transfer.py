@@ -5,7 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from rex.output import error, info, success
+from rex.exceptions import TransferError
+from rex.output import info, success
 from rex.ssh.executor import SSHExecutor
 from rex.utils import map_to_remote
 
@@ -36,31 +37,30 @@ class FileTransfer:
         self.target = target
         self.executor = executor
 
-    def push(self, local: Path, remote: str | None = None) -> bool:
+    def push(self, local: Path, remote: str | None = None) -> None:
         """Upload file/directory to remote.
 
         If remote is None, mirrors local path structure under remote $HOME.
-        Returns True on success.
+
+        Raises:
+            TransferError: If the transfer fails.
         """
         local = local.resolve()
         if not local.exists():
-            error(f"Path not found: {local}")
-            return False
+            raise TransferError(f"Path not found: {local}")
 
         if remote is None:
             # Get remote home and map path
             code, stdout, _ = self.executor.exec("echo $HOME")
             if code != 0 or not stdout.strip():
-                error(f"Failed to get remote home directory")
-                return False
+                raise TransferError("Failed to get remote home directory")
             remote = map_to_remote(local, stdout.strip())
 
         # Create remote parent directory
         remote_parent = str(Path(remote).parent)
         code, _, _ = self.executor.exec(f"mkdir -p {_shell_quote(remote_parent)}")
         if code != 0:
-            error("Failed to create remote directory")
-            return False
+            raise TransferError("Failed to create remote directory")
 
         info(f"Pushing to {self.target}:{remote}")
 
@@ -71,17 +71,17 @@ class FileTransfer:
 
         result = subprocess.run(args)
         if result.returncode != 0:
-            error("Push failed")
-            return False
+            raise TransferError("Push failed")
 
         success(f"Pushed {local.name}")
-        return True
 
-    def pull(self, remote: str, local: Path | None = None) -> bool:
+    def pull(self, remote: str, local: Path | None = None) -> None:
         """Download file/directory from remote (supports globs).
 
         If local is None, downloads to current directory.
-        Returns True on success.
+
+        Raises:
+            TransferError: If the transfer fails.
         """
         if local is None:
             local = Path.cwd()
@@ -96,11 +96,9 @@ class FileTransfer:
         result = subprocess.run(args)
 
         if result.returncode != 0:
-            error("Pull failed")
-            return False
+            raise TransferError("Pull failed")
 
         success(f"Pulled to {local}")
-        return True
 
     def sync(
         self,
@@ -109,30 +107,28 @@ class FileTransfer:
         *,
         excludes: list[str] | None = None,
         delete: bool = True,
-    ) -> bool:
+    ) -> None:
         """Rsync project to remote with Python project defaults.
 
-        Returns True on success.
+        Raises:
+            TransferError: If the sync fails.
         """
         local = local.resolve()
         if not local.is_dir():
-            error(f"Directory not found: {local}")
-            return False
+            raise TransferError(f"Directory not found: {local}")
 
         if remote is None:
             # Get remote home and map path
             code, stdout, _ = self.executor.exec("echo $HOME")
             if code != 0 or not stdout.strip():
-                error("Failed to get remote home directory")
-                return False
+                raise TransferError("Failed to get remote home directory")
             remote = map_to_remote(local, stdout.strip())
 
         # Create remote parent directory
         remote_parent = str(Path(remote).parent)
         code, _, _ = self.executor.exec(f"mkdir -p {_shell_quote(remote_parent)}")
         if code != 0:
-            error("Failed to create remote directory")
-            return False
+            raise TransferError("Failed to create remote directory")
 
         info(f"Syncing to {self.target}:{remote}")
 
@@ -149,11 +145,9 @@ class FileTransfer:
 
         result = subprocess.run(args)
         if result.returncode != 0:
-            error("Sync failed")
-            return False
+            raise TransferError("Sync failed")
 
         success(f"Synced {local.name}")
-        return True
 
 
 def _shell_quote(s: str) -> str:

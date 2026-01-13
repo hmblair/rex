@@ -2,7 +2,28 @@
 
 from importlib.metadata import version, PackageNotFoundError
 
+from rex.exceptions import (
+    RexError,
+    ConfigError,
+    ValidationError,
+    SSHError,
+    TransferError,
+    ExecutionError,
+    SlurmError,
+)
+
 try:
     __version__ = version("rex")
 except PackageNotFoundError:
     __version__ = "0.0.0.dev0"  # Fallback for editable installs without scm
+
+__all__ = [
+    "__version__",
+    "RexError",
+    "ConfigError",
+    "ValidationError",
+    "SSHError",
+    "TransferError",
+    "ExecutionError",
+    "SlurmError",
+]

@@ -29,10 +29,16 @@ def _colorize(color: str, text: str) -> str:
     return text
 
 
-def error(msg: str) -> None:
-    """Print error message and exit."""
+def error(msg: str, *, exit_now: bool = True) -> None:
+    """Print error message and optionally exit.
+
+    Args:
+        msg: The error message to print.
+        exit_now: If True (default), exit with code 1 after printing.
+    """
     print(_colorize(RED, f"error: {msg}"), file=sys.stderr)
-    sys.exit(1)
+    if exit_now:
+        sys.exit(1)
 
 
 def warn(msg: str) -> None:

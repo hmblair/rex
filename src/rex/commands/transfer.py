@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from rex.config.project import ProjectConfig
-from rex.output import info, success
+from rex.exceptions import TransferError
+from rex.output import error, info, success
 from rex.ssh.executor import SSHExecutor
 from rex.ssh.transfer import FileTransfer
 
@@ -16,9 +17,12 @@ def push(
     remote: str | None = None,
 ) -> int:
     """Push file/directory to remote."""
-    if transfer.push(local, remote):
+    try:
+        transfer.push(local, remote)
         return 0
-    return 1
+    except TransferError as e:
+        error(e.message, exit_now=False)
+        return 1
 
 
 def pull(
@@ -27,9 +31,12 @@ def pull(
     local: Path | None = None,
 ) -> int:
     """Pull file/directory from remote."""
-    if transfer.pull(remote, local):
+    try:
+        transfer.pull(remote, local)
         return 0
-    return 1
+    except TransferError as e:
+        error(e.message, exit_now=False)
+        return 1
 
 
 def sync(
@@ -61,7 +68,10 @@ def sync(
         remote_path = project.code_dir
 
     # Sync
-    if not transfer.sync(local_path, remote_path):
+    try:
+        transfer.sync(local_path, remote_path)
+    except TransferError as e:
+        error(e.message, exit_now=False)
         return 1
 
     # Pip install if applicable

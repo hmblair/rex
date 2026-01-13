@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from rex.exceptions import SSHError
+from rex.output import error
 from rex.ssh.connection import SSHConnection
 
 
 def connect(target: str) -> int:
     """Establish persistent SSH connection."""
     conn = SSHConnection(target)
-    if conn.connect():
+    try:
+        conn.connect()
         return 0
-    return 1
+    except SSHError as e:
+        error(e.message, exit_now=False)
+        return 1
 
 
 def disconnect(target: str) -> int:

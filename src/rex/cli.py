@@ -8,6 +8,7 @@ from pathlib import Path
 
 from rex import __version__
 from rex.config import ProjectConfig, expand_alias, load_aliases
+from rex.exceptions import RexError, ValidationError, ConfigError
 from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
 from rex.output import error
 from rex.ssh import SSHExecutor, FileTransfer
@@ -63,6 +64,7 @@ Examples:
     parser.add_argument("--gres", help="SLURM GPU resources")
     parser.add_argument("--time", help="SLURM time limit")
     parser.add_argument("--cpus", type=int, help="SLURM CPUs per task")
+    parser.add_argument("--mem", help="SLURM memory allocation (e.g., 4G, 16000M)")
     parser.add_argument("--constraint", help="SLURM node constraint")
     parser.add_argument("--prefer", help="SLURM node preference (soft constraint)")
     parser.add_argument("--gpu", action="store_true", help="Use GPU partition")
@@ -106,6 +108,17 @@ Examples:
 
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
+    try:
+        return _main(argv)
+    except RexError as e:
+        error(e.message, exit_now=False)
+        return e.exit_code
+    except KeyboardInterrupt:
+        return 130
+
+
+def _main(argv: list[str] | None = None) -> int:
+    """Internal main function that may raise RexError."""
     parser = build_parser()
     args = parser.parse_intermixed_args(argv)
 
@@ -171,6 +184,8 @@ def main(argv: list[str] | None = None) -> int:
             args.time = project.time
         if not args.cpus and project.cpus:
             args.cpus = project.cpus
+        if not args.mem and project.mem:
+            args.mem = project.mem
         if not args.constraint and project.constraint:
             args.constraint = project.constraint
         if not args.prefer and project.prefer:
@@ -209,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
             gres=gres,
             time=args.time,
             cpus=args.cpus,
+            mem=args.mem,
             constraint=args.constraint,
             prefer=args.prefer,
         )
@@ -231,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             validate_job_name(args.name)
         except ValueError as e:
-            error(str(e))
+            raise ValidationError(str(e))
 
     # Dispatch commands
     if args.connect:
@@ -256,8 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.last or job_id == "--last":
             job_id = get_last_job(ssh, target)
             if not job_id:
-                error("No jobs found")
-                return 1
+                raise ValidationError("No jobs found")
         return get_status(executor, target, job_id, args.json)
 
     if args.log:
@@ -266,8 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.last or job_id == "--last":
             job_id = get_last_job(ssh, target)
             if not job_id:
-                error("No jobs found")
-                return 1
+                raise ValidationError("No jobs found")
         return show_log(ssh, target, job_id, args.follow)
 
     if args.kill:
@@ -276,8 +290,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.last or job_id == "--last":
             job_id = get_last_job(ssh, target)
             if not job_id:
-                error("No jobs found")
-                return 1
+                raise ValidationError("No jobs found")
         return kill_job(executor, target, job_id)
 
     if args.watch:
@@ -286,8 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.last or job_id == "--last":
             job_id = get_last_job(ssh, target)
             if not job_id:
-                error("No jobs found")
-                return 1
+                raise ValidationError("No jobs found")
         return watch_job(executor, target, job_id, args.json)
 
     if args.gpu_info:
@@ -323,8 +335,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.build:
         if not project:
-            error("No .rex.toml found")
-            return 1
+            raise ConfigError("No .rex.toml found")
         from rex.commands.build import build
         return build(ssh, project, args.wait, args.clean, use_gpu=args.gpu)
 

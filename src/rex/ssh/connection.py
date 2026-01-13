@@ -5,7 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from rex.output import error, info, success, warn
+from rex.exceptions import SSHError
+from rex.output import info, success, warn
 
 SOCKET_DIR = Path.home() / ".ssh" / "controlmasters"
 
@@ -36,14 +37,15 @@ class SSHConnection:
         )
         return result.returncode == 0
 
-    def connect(self) -> bool:
+    def connect(self) -> None:
         """Establish persistent connection.
 
-        Returns True on success, False on failure.
+        Raises:
+            SSHError: If connection fails.
         """
         if self.is_connected():
             info(f"Already connected to {self.target}")
-            return True
+            return
 
         # Remove stale socket if exists
         if self.socket_path.exists():
@@ -70,11 +72,9 @@ class SSHConnection:
         )
 
         if result.returncode != 0:
-            error(f"Failed to connect to {self.target}")
-            return False
+            raise SSHError(f"Failed to connect to {self.target}")
 
         success(f"Connected to {self.target}")
-        return True
 
     def disconnect(self) -> bool:
         """Close persistent connection.

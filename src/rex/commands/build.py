@@ -5,7 +5,8 @@ from __future__ import annotations
 import time
 
 from rex.config.project import ProjectConfig
-from rex.output import error, info, success
+from rex.exceptions import ConfigError, SlurmError
+from rex.output import info, success
 from rex.ssh.executor import SSHExecutor
 
 
@@ -21,10 +22,13 @@ def build(
     Requires .rex.toml with code_dir.
     Submits build job via sbatch.
     use_gpu: If True, use gpu_partition; otherwise use cpu_partition.
+
+    Raises:
+        ConfigError: If code_dir is not configured.
+        SlurmError: If job submission or build fails.
     """
     if not project.code_dir:
-        error("No .rex.toml found with code_dir")
-        return 1
+        raise ConfigError("No .rex.toml found with code_dir")
 
     from rex.utils import generate_job_name
     job = f"build-{generate_job_name()}"
@@ -88,8 +92,7 @@ echo "Finished: $(date)"
     )
 
     if not stdout.strip():
-        error("Failed to submit build job")
-        return 1
+        raise SlurmError("Failed to submit build job")
 
     slurm_id = stdout.strip()
     success(f"Submitted: {job} (SLURM {slurm_id})")
@@ -113,8 +116,9 @@ echo "Finished: $(date)"
                     success("Build complete")
                     return 0
                 else:
-                    error(f"Build failed - check log: rex {ssh.target} --exec 'cat {remote_log}'")
-                    return 1
+                    raise SlurmError(
+                        f"Build failed - check log: rex {ssh.target} --exec 'cat {remote_log}'"
+                    )
 
             time.sleep(poll_interval)
 
