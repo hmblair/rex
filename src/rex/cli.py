@@ -42,8 +42,9 @@ Examples:
   rex gpu --watch --last              # wait for most recent job
   rex gpu --push ./data ~/data        # upload directory
   rex gpu --pull ~/checkpoints ./     # download directory
-  rex gpu --exec "ls -la ~/models"    # run shell command on login node
+  rex gpu --exec "ls -la ~/models"    # run shell command
   rex gpu -s --exec "nvidia-smi"      # run shell command via SLURM
+  rex gpu --exec-login "ls -la"       # run on login node (even with -s)
   rex gpu --sync                      # sync current project to remote
   rex gpu --connect                   # open persistent connection
   rex gpu --disconnect                # close connection when done
