@@ -128,15 +128,87 @@ done
 
 
 def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
-    """Show SLURM GPU availability."""
+    """Show SLURM GPU availability with partition-specific usage statistics."""
     partition_opt = f"-p {partition}" if partition else ""
-    code, stdout, _ = ssh.exec(
-        f"sinfo {partition_opt} -N -o '%N %G' --noheader 2>/dev/null | grep -v '(null)' | sort -u"
+
+    # Get total GPUs per node in partition
+    code, node_info, _ = ssh.exec(
+        f"sinfo {partition_opt} -N -O 'NodeHost:30,Gres:20,StateLong:15' "
+        f"--noheader 2>/dev/null | sort -u"
     )
 
-    if not stdout.strip():
+    if not node_info.strip():
         print("No GPUs in partition")
-    else:
-        print(stdout.strip())
+        return 0
+
+    # Parse node info
+    nodes: dict[str, tuple[int, str]] = {}  # node -> (total_gpus, state)
+    total_gpus = 0
+
+    for line in node_info.strip().split("\n"):
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+
+        node = parts[0]
+        gres = parts[1]
+        state = parts[2]
+
+        # Parse total GPUs from gres (e.g., "gpu:8(S:0-3)" -> 8)
+        node_total = 0
+        if "gpu:" in gres:
+            try:
+                gres_part = gres.split("gpu:")[1]
+                num_str = gres_part.split("(")[0]
+                node_total = int(num_str)
+            except (IndexError, ValueError):
+                pass
+
+        if node_total > 0:
+            nodes[node] = (node_total, state)
+            total_gpus += node_total
+
+    if not nodes:
+        print("No GPUs in partition")
+        return 0
+
+    # Get partition-specific GPU usage from running jobs
+    code, job_info, _ = ssh.exec(
+        f"squeue {partition_opt} -t running -o '%N %b' --noheader 2>/dev/null"
+    )
+
+    # Count GPUs used per node (partition jobs only)
+    node_used: dict[str, int] = {n: 0 for n in nodes}
+    for line in job_info.strip().split("\n"):
+        if not line or "gpu" not in line:
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            job_node = parts[0]
+            gres_req = parts[1]
+            # Parse gpu count from gres/gpu:N
+            if "gpu:" in gres_req:
+                try:
+                    gpu_count = int(gres_req.split("gpu:")[-1])
+                    if job_node in node_used:
+                        node_used[job_node] += gpu_count
+                except ValueError:
+                    pass
+
+    # Print per-node info
+    used_gpus = 0
+    for node, (node_total, state) in sorted(nodes.items()):
+        used = node_used.get(node, 0)
+        used_gpus += used
+        free = node_total - used
+        if free > 0:
+            status = f"{GREEN}{free} free{NC}"
+        else:
+            status = f"{RED}0 free{NC}"
+        print(f"{node}: {used}/{node_total} used  {status}  ({state})")
+
+    # Print summary
+    free_gpus = total_gpus - used_gpus
+    print(f"\nTotal: {used_gpus}/{total_gpus} GPUs used, {free_gpus} free")
 
     return 0
