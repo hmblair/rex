@@ -131,9 +131,9 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
     """Show SLURM GPU availability with partition-specific usage statistics."""
     partition_opt = f"-p {partition}" if partition else ""
 
-    # Get total GPUs per node in partition
+    # Get total GPUs per node in partition (with features for GPU type)
     code, node_info, _ = ssh.exec(
-        f"sinfo {partition_opt} -N -O 'NodeHost:30,Gres:20,StateLong:15' "
+        f"sinfo {partition_opt} -N -O 'NodeHost:30,Gres:20,StateLong:15,Features:100' "
         f"--noheader 2>/dev/null | sort -u"
     )
 
@@ -142,7 +142,7 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
         return 0
 
     # Parse node info
-    nodes: dict[str, tuple[int, str]] = {}  # node -> (total_gpus, state)
+    nodes: dict[str, tuple[int, str, str]] = {}  # node -> (total_gpus, state, gpu_type)
     total_gpus = 0
 
     for line in node_info.strip().split("\n"):
@@ -153,6 +153,7 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
         node = parts[0]
         gres = parts[1]
         state = parts[2]
+        features = parts[3] if len(parts) > 3 else ""
 
         # Parse total GPUs from gres (e.g., "gpu:8(S:0-3)" -> 8)
         node_total = 0
@@ -164,8 +165,23 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
             except (IndexError, ValueError):
                 pass
 
+        # Parse GPU type from features (e.g., "GPU_SKU:A100_SXM4" -> "A100")
+        gpu_type = ""
+        if "GPU_SKU:" in features:
+            try:
+                sku = features.split("GPU_SKU:")[1].split(",")[0]
+                # Simplify SKU names (A100_SXM4 -> A100, H100 -> H100)
+                if sku.startswith("A100"):
+                    gpu_type = "A100"
+                elif sku.startswith("H1"):
+                    gpu_type = "H100"
+                else:
+                    gpu_type = sku.split("_")[0]
+            except IndexError:
+                pass
+
         if node_total > 0:
-            nodes[node] = (node_total, state)
+            nodes[node] = (node_total, state, gpu_type)
             total_gpus += node_total
 
     if not nodes:
@@ -197,7 +213,7 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
 
     # Print per-node info
     used_gpus = 0
-    for node, (node_total, state) in sorted(nodes.items()):
+    for node, (node_total, state, gpu_type) in sorted(nodes.items()):
         used = node_used.get(node, 0)
         used_gpus += used
         free = node_total - used
@@ -205,7 +221,8 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
             status = f"{GREEN}{free} free{NC}"
         else:
             status = f"{RED}0 free{NC}"
-        print(f"{node}: {used}/{node_total} used  {status}  ({state})")
+        gpu_label = f" {gpu_type}" if gpu_type else ""
+        print(f"{node}:{gpu_label} {used}/{node_total} used  {status}  ({state})")
 
     # Print summary
     free_gpus = total_gpus - used_gpus
