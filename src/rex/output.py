@@ -45,13 +45,13 @@ def setup_logging(debug: bool = False) -> None:
 
     # Only add handler if none exist
     if not _logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(ColoredFormatter("%(message)s"))
-        _logger.addHandler(handler)
+        stream_handler = logging.StreamHandler(sys.stderr)
+        stream_handler.setFormatter(ColoredFormatter("%(message)s"))
+        _logger.addHandler(stream_handler)
     else:
         # Update existing handler level
-        for handler in _logger.handlers:
-            handler.setLevel(level)
+        for h in _logger.handlers:
+            h.setLevel(level)
 
 
 def get_logger() -> logging.Logger:
