@@ -33,30 +33,43 @@ class SlurmExecutor:
     Uses squeue/scancel for job management.
     """
 
+    # Single source of truth: (attribute_name, slurm_option_name)
+    OPTION_MAPPINGS = [
+        ("partition", "partition"),
+        ("gres", "gres"),
+        ("time", "time"),
+        ("cpus", "cpus-per-task"),
+        ("mem", "mem"),
+        ("constraint", "constraint"),
+        ("prefer", "prefer"),
+    ]
+
     def __init__(self, ssh: SSHExecutor, options: SlurmOptions | None = None):
         self.ssh = ssh
         self.options = options or SlurmOptions()
 
-    def _build_slurm_opts(self) -> str:
-        """Build srun/sbatch resource options string."""
-        opts = ""
-        if self.options.partition:
-            opts += f" --partition={self.options.partition}"
-        if self.options.gres:
-            opts += f" --gres={self.options.gres}"
-        if self.options.time:
-            opts += f" --time={self.options.time}"
-        if self.options.cpus:
-            opts += f" --cpus-per-task={self.options.cpus}"
-        if self.options.mem:
-            opts += f" --mem={self.options.mem}"
-        if self.options.constraint:
-            opts += f" --constraint={self.options.constraint}"
-        if self.options.prefer:
-            opts += f" --prefer={self.options.prefer}"
-        if opts:
-            debug(f"[slurm] options:{opts}")
+    def _get_options(self) -> list[tuple[str, str]]:
+        """Get all SLURM options as (key, value) pairs."""
+        opts = []
+        for attr, slurm_key in self.OPTION_MAPPINGS:
+            value = getattr(self.options, attr)
+            if value is not None:
+                opts.append((slurm_key, str(value)))
         return opts
+
+    def _build_slurm_opts(self) -> str:
+        """Build command-line options string for srun."""
+        opts = self._get_options()
+        if not opts:
+            return ""
+        result = " " + " ".join(f"--{k}={v}" for k, v in opts)
+        debug(f"[slurm] options:{result}")
+        return result
+
+    def _apply_options_to_builder(self, builder: SbatchBuilder) -> None:
+        """Apply all SLURM options to an SbatchBuilder."""
+        for key, value in self._get_options():
+            builder.sbatch_option(key, value)
 
     def run_foreground(
         self, ctx: ExecutionContext, script_path: Path, args: list[str]
@@ -146,12 +159,7 @@ class SlurmExecutor:
         builder = SbatchBuilder().shebang(login=True)
         builder.job_name(f"rex-{job_name}")
         builder.output(remote_log)
-        if self.options.partition:
-            builder.partition(self.options.partition)
-        if self.options.gres:
-            builder.gres(self.options.gres)
-        if self.options.time:
-            builder.time(self.options.time)
+        self._apply_options_to_builder(builder)
 
         builder.blank_line()
         builder.run_command('echo "[rex] Started: $(date)"')
@@ -289,12 +297,7 @@ class SlurmExecutor:
         builder = SbatchBuilder().shebang(login=True)
         builder.job_name(f"rex-{job_name}")
         builder.output(remote_log)
-        if self.options.partition:
-            builder.partition(self.options.partition)
-        if self.options.gres:
-            builder.gres(self.options.gres)
-        if self.options.time:
-            builder.time(self.options.time)
+        self._apply_options_to_builder(builder)
 
         builder.blank_line()
         builder.run_command('echo "[rex] Started: $(date)"')
