@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from rex.exceptions import SSHError
 from rex.ssh.executor import SSHExecutor, _shell_quote, SOCKET_DIR
 
 
@@ -225,3 +226,119 @@ class TestSSHExecutorExecScriptStreaming:
 
         mock_popen_class.assert_called_once()
         mock_popen.communicate.assert_called_once()
+
+
+class TestSSHExecutorCheckConnection:
+    """Tests for SSHExecutor.check_connection method."""
+
+    def test_check_connection_with_valid_socket(self, mocker, tmp_path):
+        """check_connection() succeeds with valid ControlMaster socket."""
+        # Create a mock socket file
+        socket_dir = tmp_path / ".ssh" / "controlmasters"
+        socket_dir.mkdir(parents=True)
+        socket_file = socket_dir / "user--host"
+        socket_file.touch()
+
+        mocker.patch("rex.ssh.executor.SOCKET_DIR", socket_dir)
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0)
+
+        executor = SSHExecutor("user@host")
+        # Should not raise
+        executor.check_connection()
+
+        # Should have called ssh -O check
+        args = mock_run.call_args[0][0]
+        assert "-O" in args
+        assert "check" in args
+
+    def test_check_connection_without_socket_success(self, mocker, tmp_path):
+        """check_connection() succeeds when no socket but SSH works."""
+        socket_dir = tmp_path / ".ssh" / "controlmasters"
+        socket_dir.mkdir(parents=True)
+
+        mocker.patch("rex.ssh.executor.SOCKET_DIR", socket_dir)
+        mock_run = mocker.patch("subprocess.run")
+        # First call (socket check) won't happen, second call (connection test) succeeds
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+
+        executor = SSHExecutor("user@host")
+        # Should not raise
+        executor.check_connection()
+
+    def test_check_connection_permission_denied(self, mocker, tmp_path):
+        """check_connection() raises SSHError on permission denied."""
+        socket_dir = tmp_path / ".ssh" / "controlmasters"
+        socket_dir.mkdir(parents=True)
+
+        mocker.patch("rex.ssh.executor.SOCKET_DIR", socket_dir)
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(
+            returncode=255,
+            stderr="Permission denied (publickey,password)."
+        )
+
+        executor = SSHExecutor("user@host")
+        with pytest.raises(SSHError) as exc_info:
+            executor.check_connection()
+
+        assert "Permission denied" in str(exc_info.value)
+        assert "--connect" in str(exc_info.value)
+
+    def test_check_connection_hostname_not_found(self, mocker, tmp_path):
+        """check_connection() raises SSHError for unknown hostname."""
+        socket_dir = tmp_path / ".ssh" / "controlmasters"
+        socket_dir.mkdir(parents=True)
+
+        mocker.patch("rex.ssh.executor.SOCKET_DIR", socket_dir)
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(
+            returncode=255,
+            stderr="ssh: Could not resolve hostname badhost: Name or service not known"
+        )
+
+        executor = SSHExecutor("user@badhost")
+        with pytest.raises(SSHError) as exc_info:
+            executor.check_connection()
+
+        assert "Could not resolve hostname" in str(exc_info.value)
+
+    def test_check_connection_stale_socket_removed(self, mocker, tmp_path):
+        """check_connection() removes stale socket and retries."""
+        socket_dir = tmp_path / ".ssh" / "controlmasters"
+        socket_dir.mkdir(parents=True)
+        socket_file = socket_dir / "user--host"
+        socket_file.touch()
+
+        mocker.patch("rex.ssh.executor.SOCKET_DIR", socket_dir)
+        mock_run = mocker.patch("subprocess.run")
+        # First call: socket check fails (stale)
+        # Second call: connection test succeeds
+        mock_run.side_effect = [
+            MagicMock(returncode=1),  # ssh -O check fails
+            MagicMock(returncode=0, stderr=""),  # connection test succeeds
+        ]
+
+        executor = SSHExecutor("user@host")
+        executor.check_connection()
+
+        # Stale socket should be removed
+        assert not socket_file.exists()
+
+    def test_check_connection_timeout(self, mocker, tmp_path):
+        """check_connection() raises SSHError on connection timeout."""
+        socket_dir = tmp_path / ".ssh" / "controlmasters"
+        socket_dir.mkdir(parents=True)
+
+        mocker.patch("rex.ssh.executor.SOCKET_DIR", socket_dir)
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(
+            returncode=255,
+            stderr="ssh: connect to host example.com port 22: Connection timed out"
+        )
+
+        executor = SSHExecutor("user@example.com")
+        with pytest.raises(SSHError) as exc_info:
+            executor.check_connection()
+
+        assert "timed out" in str(exc_info.value)

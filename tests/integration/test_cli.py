@@ -199,10 +199,12 @@ class TestMainJobNameValidation:
         """Valid job name is accepted."""
         mocker.patch("rex.config.alias.load_aliases", return_value={})
         mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
-        mocker.patch("rex.ssh.executor.SSHExecutor")
+        mock_ssh = mocker.MagicMock()
+        mocker.patch("rex.cli.SSHExecutor", return_value=mock_ssh)
         mock_run = mocker.patch("rex.commands.run.run_python", return_value=0)
 
         result = main(["user@host", "-n", "valid-name_123", "script.py"])
 
-        # Should get past validation
+        # Should get past validation (check_connection called before running)
+        mock_ssh.check_connection.assert_called_once()
         mock_run.assert_called_once()

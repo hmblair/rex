@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from rex.exceptions import SSHError
 from rex.output import debug
 
 SOCKET_DIR = Path.home() / ".ssh" / "controlmasters"
@@ -18,6 +19,52 @@ class SSHExecutor:
         self.target = target
         self.verbose = verbose
         self._opts = self._build_opts()
+
+    def check_connection(self) -> None:
+        """Verify SSH connection works.
+
+        Raises SSHError with user-friendly message if connection fails.
+        """
+        socket = self._socket_path()
+
+        # First check if we have a ControlMaster socket
+        if socket.exists():
+            # Verify the socket is still valid
+            result = subprocess.run(
+                ["ssh", "-O", "check", "-o", f"ControlPath={socket}", self.target],
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                return  # Connection is good
+
+            # Socket exists but is stale - remove it
+            debug(f"[ssh] Stale socket at {socket}, removing")
+            socket.unlink()
+
+        # Try a quick connection test
+        result = subprocess.run(
+            ["ssh", *self._opts, "-o", "BatchMode=yes", self.target, "exit 0"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            # Provide helpful error messages for common failures
+            if "Permission denied" in stderr:
+                raise SSHError(
+                    f"SSH connection to {self.target} failed: Permission denied.\n"
+                    f"Try: rex {self.target.split('@')[1] if '@' in self.target else self.target} --connect"
+                )
+            elif "Could not resolve hostname" in stderr:
+                raise SSHError(f"SSH connection failed: Could not resolve hostname '{self.target}'")
+            elif "Connection refused" in stderr:
+                raise SSHError(f"SSH connection to {self.target} failed: Connection refused")
+            elif "Connection timed out" in stderr or "timed out" in stderr.lower():
+                raise SSHError(f"SSH connection to {self.target} timed out")
+            else:
+                raise SSHError(f"SSH connection to {self.target} failed: {stderr or 'Unknown error'}")
 
     def _socket_path(self) -> Path:
         """Get socket path for this target."""

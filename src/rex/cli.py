@@ -289,6 +289,9 @@ def _main(argv: list[str] | None = None) -> int:
         from rex.commands.connection import connection_status
         return connection_status(target)
 
+    # Verify SSH connection works before running any commands
+    ssh.check_connection()
+
     if args.jobs:
         from rex.commands.jobs import list_jobs
         return list_jobs(executor, target, args.json)

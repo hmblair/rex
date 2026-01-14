@@ -2,15 +2,39 @@
 
 from __future__ import annotations
 
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from rex.exceptions import SSHError
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
 from rex.execution.script import SbatchBuilder, ScriptBuilder
 from rex.output import debug, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id
+
+
+def _ssh_write(ssh: SSHExecutor, content: str, remote_path: str, chmod: str | None = None) -> None:
+    """Write content to remote file via SSH.
+
+    Raises SSHError on failure with user-friendly message.
+    """
+    cmd = f"cat > {remote_path}"
+    if chmod:
+        cmd += f" && chmod {chmod} {remote_path}"
+
+    try:
+        result = subprocess.run(
+            ["ssh", *ssh._opts, ssh.target, cmd],
+            input=content.encode(),
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.decode().strip() if result.stderr else ""
+            raise SSHError(f"Failed to write to {remote_path}: {stderr or 'SSH error'}")
+    except subprocess.CalledProcessError as e:
+        raise SSHError(f"SSH connection failed while writing to {remote_path}") from e
 
 
 @dataclass
@@ -86,13 +110,7 @@ class SlurmExecutor:
             script_content = f.read()
 
         self.ssh.exec(f"mkdir -p {script_dir}")
-
-        import subprocess
-        subprocess.run(
-            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_py}"],
-            input=script_content.encode(),
-            check=True,
-        )
+        _ssh_write(self.ssh, script_content, remote_py)
 
         # Build wrapper script
         builder = ScriptBuilder().shebang(login=True)
@@ -109,11 +127,7 @@ class SlurmExecutor:
         wrapper = builder.build()
 
         # Write wrapper to remote
-        subprocess.run(
-            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_sh} && chmod +x {remote_sh}"],
-            input=wrapper.encode(),
-            check=True,
-        )
+        _ssh_write(self.ssh, wrapper, remote_sh, chmod="+x")
 
         # Execute via srun
         slurm_opts = self._build_slurm_opts()
@@ -149,11 +163,9 @@ class SlurmExecutor:
 
         # Create directory and copy script
         self.ssh.exec("mkdir -p ~/.rex")
-        import subprocess
-        subprocess.run(
-            ["scp", "-q", str(script_path), f"{self.ssh.target}:{remote_script}"],
-            check=True,
-        )
+        with open(script_path) as f:
+            script_content = f.read()
+        _ssh_write(self.ssh, script_content, remote_script)
 
         # Build sbatch script
         builder = SbatchBuilder().shebang(login=True)
@@ -194,11 +206,7 @@ class SlurmExecutor:
         sbatch_content = builder.build()
 
         # Write sbatch script
-        subprocess.run(
-            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_sbatch}"],
-            input=sbatch_content.encode(),
-            check=True,
-        )
+        _ssh_write(self.ssh, sbatch_content, remote_sbatch)
 
         # Submit job
         code, stdout, stderr = self.ssh.exec(f"sbatch --parsable {remote_sbatch}")
@@ -266,12 +274,7 @@ class SlurmExecutor:
 
         # Write script to remote
         self.ssh.exec(f"mkdir -p {script_dir}")
-        import subprocess
-        subprocess.run(
-            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_script} && chmod +x {remote_script}"],
-            input=script_content.encode(),
-            check=True,
-        )
+        _ssh_write(self.ssh, script_content, remote_script, chmod="+x")
 
         # Execute via srun
         slurm_opts = self._build_slurm_opts()
@@ -337,12 +340,7 @@ class SlurmExecutor:
         sbatch_content = builder.build()
 
         # Write and submit
-        import subprocess
-        subprocess.run(
-            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_sbatch}"],
-            input=sbatch_content.encode(),
-            check=True,
-        )
+        _ssh_write(self.ssh, sbatch_content, remote_sbatch)
 
         code, stdout, stderr = self.ssh.exec(f"sbatch --parsable {remote_sbatch}")
         if code != 0 or not stdout.strip():
