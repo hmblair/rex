@@ -178,10 +178,7 @@ def _main(argv: list[str] | None = None) -> int:
             args.cpus = project.cpus
         if not args.mem and project.mem:
             args.mem = project.mem
-        if not args.constraint and project.constraint:
-            args.constraint = project.constraint
-        if not args.prefer and project.prefer:
-            args.prefer = project.prefer
+        # Note: constraint and prefer from config are applied later, filtered by use_gpu
 
     # Apply extra args from alias as fallback (store partition separately so --gpu/--cpu can override)
     alias_partition = None
@@ -220,10 +217,16 @@ def _main(argv: list[str] | None = None) -> int:
             else:
                 partition = project.cpu_partition
 
-    # Only apply gres from config if using GPU partition
+    # Only apply GPU-related options from config if using GPU partition
     gres = args.gres
     if not gres and use_gpu and project and project.gres:
         gres = project.gres
+    constraint = args.constraint
+    if not constraint and use_gpu and project and project.constraint:
+        constraint = project.constraint
+    prefer = args.prefer
+    if not prefer and use_gpu and project and project.prefer:
+        prefer = project.prefer
 
     # Create executor
     executor: Executor
@@ -234,8 +237,8 @@ def _main(argv: list[str] | None = None) -> int:
             time=args.time,
             cpus=args.cpus,
             mem=args.mem,
-            constraint=args.constraint,
-            prefer=args.prefer,
+            constraint=constraint,
+            prefer=prefer,
         )
         executor = SlurmExecutor(ssh, slurm_opts)
     else:
