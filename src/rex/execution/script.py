@@ -94,6 +94,10 @@ class SbatchBuilder(ScriptBuilder):
         """Set output log path."""
         return self.sbatch_option("output", path)
 
+    def open_mode(self, mode: str) -> Self:
+        """Set output open mode (append or truncate)."""
+        return self.sbatch_option("open-mode", mode)
+
     def partition(self, name: str) -> Self:
         """Set partition."""
         return self.sbatch_option("partition", name)

@@ -159,10 +159,11 @@ class SlurmExecutor:
         builder = SbatchBuilder().shebang(login=True)
         builder.job_name(f"rex-{job_name}")
         builder.output(remote_log)
+        builder.open_mode("append")
         self._apply_options_to_builder(builder)
 
         builder.blank_line()
-        builder.run_command('echo "[rex] Started: $(date)"')
+        builder.run_command('echo "[rex] Running: $(date)"')
         builder.run_command('echo "[rex] Host: $(hostname)"')
         builder.run_command(f'echo "[rex] Script: {remote_script}"')
         builder.run_command('echo "---"')
@@ -221,6 +222,14 @@ class SlurmExecutor:
                 is_slurm=True,
                 slurm_id=None,
             )
+
+        # Write submission info to log (job will append when it starts)
+        self.ssh.exec(
+            f'echo "[rex] Submitted: $(date)" > {remote_log} && '
+            f'echo "[rex] SLURM ID: {slurm_id}" >> {remote_log} && '
+            f'echo "[rex] Status: pending" >> {remote_log} && '
+            f'echo "---" >> {remote_log}'
+        )
 
         target = self.ssh.target
         success(f"Submitted: {job_name} (SLURM {slurm_id})")
@@ -297,10 +306,11 @@ class SlurmExecutor:
         builder = SbatchBuilder().shebang(login=True)
         builder.job_name(f"rex-{job_name}")
         builder.output(remote_log)
+        builder.open_mode("append")
         self._apply_options_to_builder(builder)
 
         builder.blank_line()
-        builder.run_command('echo "[rex] Started: $(date)"')
+        builder.run_command('echo "[rex] Running: $(date)"')
         builder.run_command('echo "[rex] Host: $(hostname)"')
         builder.run_command(f'echo "[rex] Command: {cmd}"')
         builder.run_command('echo "---"')
@@ -355,6 +365,14 @@ class SlurmExecutor:
                 is_slurm=True,
                 slurm_id=None,
             )
+
+        # Write submission info to log (job will append when it starts)
+        self.ssh.exec(
+            f'echo "[rex] Submitted: $(date)" > {remote_log} && '
+            f'echo "[rex] SLURM ID: {slurm_id}" >> {remote_log} && '
+            f'echo "[rex] Status: pending" >> {remote_log} && '
+            f'echo "---" >> {remote_log}'
+        )
 
         target = self.ssh.target
         success(f"Submitted: {job_name} (SLURM {slurm_id})")
