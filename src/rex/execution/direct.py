@@ -48,6 +48,8 @@ class DirectExecutor:
         builder = ScriptBuilder().shebang()
         if ctx.gpus:
             builder.export("CUDA_VISIBLE_DEVICES", ctx.gpus)
+        if ctx.code_dir:
+            builder.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
             builder.cd(ctx.run_dir)
         builder.run_python(ctx.python, remote_py, args)
@@ -88,6 +90,8 @@ class DirectExecutor:
         env_prefix = ""
         if ctx.gpus:
             env_prefix += f"export CUDA_VISIBLE_DEVICES={ctx.gpus}; "
+        if ctx.code_dir:
+            env_prefix += f"source {ctx.code_dir}/.venv/bin/activate; "
         if ctx.run_dir:
             env_prefix += f"cd {ctx.run_dir}; "
 
