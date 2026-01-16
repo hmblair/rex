@@ -173,10 +173,11 @@ def job_pattern(job_id: str) -> str:
 
 
 def generate_job_name() -> str:
-    """Generate timestamp-based job name."""
+    """Generate unique job name with timestamp and random suffix."""
+    import secrets
     from datetime import datetime
 
-    return datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2)}"
 
 
 def generate_script_id() -> str:
