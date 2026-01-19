@@ -76,6 +76,7 @@ default_slurm = true                    # always use SLURM for this host
 
 [hosts.sherlock.env]
 MY_VAR = "value"
+PATH = "$PATH:/custom/bin"              # supports variable expansion
 
 [hosts.imp]
 code_dir = "/home/user"
@@ -98,6 +99,7 @@ modules = ["python/3.12", "special/1.0"] # replaces host modules if specified
 
 [env]
 PROJECT_VAR = "value"
+PATH = "$PATH:/project/bin"             # variable expansion supported
 ```
 
 Paths are computed automatically:

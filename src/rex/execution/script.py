@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 from typing import TYPE_CHECKING
 
@@ -9,6 +10,22 @@ if TYPE_CHECKING:
     from rex.execution.base import ExecutionContext
     from rex.ssh.executor import SSHExecutor
     from typing_extensions import Self
+
+
+def quote_with_expansion(value: str) -> str:
+    """Quote a value for shell, allowing $VAR expansion if present.
+
+    If the value contains shell variable references ($VAR or ${VAR}),
+    uses double quotes and escapes dangerous characters while preserving
+    variable expansion. Otherwise, uses shlex.quote() for full escaping.
+    """
+    if re.search(r'\$[A-Za-z_][A-Za-z0-9_]*|\$\{[^}]+\}', value):
+        escaped = value.replace('\\', '\\\\')
+        escaped = escaped.replace('"', '\\"')
+        escaped = escaped.replace('`', '\\`')
+        escaped = escaped.replace('$(', '\\$(')
+        return f'"{escaped}"'
+    return shlex.quote(value)
 
 
 def get_log_path(ssh: "SSHExecutor", job_id: str) -> str | None:
@@ -44,7 +61,7 @@ def build_context_commands(
         commands.append(f"module load {' '.join(ctx.modules)}")
 
     for key, value in ctx.env.items():
-        commands.append(f"export {key}={shlex.quote(value)}")
+        commands.append(f"export {key}={quote_with_expansion(value)}")
 
     if ctx.code_dir:
         commands.append(f"source {shlex.quote(ctx.code_dir + '/.venv/bin/activate')}")
@@ -80,7 +97,7 @@ class ScriptBuilder:
 
     def export(self, key: str, value: str) -> Self:
         """Add export statement."""
-        self._lines.append(f"export {key}={shlex.quote(value)}")
+        self._lines.append(f"export {key}={quote_with_expansion(value)}")
         return self
 
     def cd(self, path: str) -> Self:
