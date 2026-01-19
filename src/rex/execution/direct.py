@@ -131,23 +131,42 @@ class DirectExecutor:
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command in foreground."""
-        # Build prefix
-        prefix = ""
+        script_id = generate_script_id()
+        remote_cmd = f"/tmp/rex-exec-{script_id}.sh"
+
+        # Build setup prefix
+        prefix_lines = []
         if ctx.modules:
-            prefix += f"module load {' '.join(ctx.modules)} && "
+            prefix_lines.append(f"module load {' '.join(ctx.modules)}")
         for key, value in ctx.env.items():
-            prefix += f"export {key}={shlex.quote(value)} && "
+            prefix_lines.append(f"export {key}={shlex.quote(value)}")
         if ctx.code_dir:
-            prefix += f"source {ctx.code_dir}/.venv/bin/activate && "
+            prefix_lines.append(f"source {ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
-            prefix += f"cd {ctx.run_dir} && "
+            prefix_lines.append(f"cd {ctx.run_dir}")
 
-        full_cmd = prefix + cmd
+        prefix = "\n".join(prefix_lines) + "\n" if prefix_lines else ""
 
-        # Build script for login shell execution
-        script = ScriptBuilder().shebang(login=True).run_command(full_cmd).build()
+        # Write command to temp file using heredoc (preserves all quoting)
+        # The quoted 'REXCMD' prevents any shell interpretation
+        write_script = f"""cat > {remote_cmd} << 'REXCMD'
+#!/bin/bash -l
+{prefix}{cmd}
+REXCMD
+chmod +x {remote_cmd}"""
 
-        return self.ssh.exec_script_streaming(script, login_shell=True, tty=None)
+        # Write the command file
+        code, _, stderr = self.ssh.exec(write_script)
+        if code != 0:
+            from rex.output import warn
+            warn(f"Failed to write command script: {stderr}")
+            return code
+
+        # Execute and cleanup
+        return self.ssh.exec_streaming(
+            f"{remote_cmd}; _e=$?; rm -f {remote_cmd}; exit $_e",
+            tty=None,
+        )
 
     def exec_detached(
         self, ctx: ExecutionContext, cmd: str, job_name: str | None = None

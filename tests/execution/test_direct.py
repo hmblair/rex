@@ -47,8 +47,14 @@ class TestDirectExecutorExecForeground:
         """Create a mock SSH executor."""
         ssh = MagicMock()
         ssh.exec.return_value = (0, "", "")
+        ssh.exec_streaming.return_value = 0
         ssh.exec_script_streaming.return_value = 0
         return ssh
+
+    def _get_heredoc_content(self, mock_ssh):
+        """Extract command from heredoc passed to ssh.exec."""
+        heredoc = mock_ssh.exec.call_args[0][0]
+        return heredoc
 
     def test_exec_foreground_double_quotes(self, mock_ssh):
         """exec_foreground preserves double quotes."""
@@ -57,9 +63,8 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, 'echo "hello world"')
 
-        # Check the script passed to exec_script_streaming
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert '"hello world"' in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert '"hello world"' in heredoc
 
     def test_exec_foreground_single_quotes(self, mock_ssh):
         """exec_foreground preserves single quotes."""
@@ -68,8 +73,8 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "echo 'hello world'")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert "hello world" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert "'hello world'" in heredoc
 
     def test_exec_foreground_dollar_variable(self, mock_ssh):
         """exec_foreground preserves dollar sign variables."""
@@ -78,9 +83,9 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "echo $HOME $USER")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert "$HOME" in script
-        assert "$USER" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert "$HOME" in heredoc
+        assert "$USER" in heredoc
 
     def test_exec_foreground_pipe(self, mock_ssh):
         """exec_foreground preserves pipe characters."""
@@ -89,8 +94,8 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "ls -la | grep foo")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert "|" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert "|" in heredoc
 
     def test_exec_foreground_semicolon(self, mock_ssh):
         """exec_foreground preserves semicolons."""
@@ -99,8 +104,8 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "cd /tmp; ls; pwd")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert ";" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert ";" in heredoc
 
     def test_exec_foreground_ampersand(self, mock_ssh):
         """exec_foreground preserves ampersands."""
@@ -109,9 +114,9 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "cmd1 && cmd2 || cmd3")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert "&&" in script
-        assert "||" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert "&&" in heredoc
+        assert "||" in heredoc
 
     def test_exec_foreground_backticks(self, mock_ssh):
         """exec_foreground preserves backticks."""
@@ -120,8 +125,8 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "echo `date`")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert "`" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert "`" in heredoc
 
     def test_exec_foreground_parentheses(self, mock_ssh):
         """exec_foreground preserves parentheses."""
@@ -130,9 +135,9 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "(cd /tmp && ls)")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert "(" in script
-        assert ")" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert "(" in heredoc
+        assert ")" in heredoc
 
     def test_exec_foreground_glob(self, mock_ssh):
         """exec_foreground preserves glob patterns."""
@@ -141,8 +146,8 @@ class TestDirectExecutorExecForeground:
 
         executor.exec_foreground(ctx, "ls *.py")
 
-        script = mock_ssh.exec_script_streaming.call_args[0][0]
-        assert "*" in script
+        heredoc = self._get_heredoc_content(mock_ssh)
+        assert "*" in heredoc
 
 
 class TestDirectExecutorExecDetached:

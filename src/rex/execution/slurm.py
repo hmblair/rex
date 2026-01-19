@@ -257,29 +257,40 @@ class SlurmExecutor:
         script_id = generate_script_id()
         script_dir = ctx.run_dir or "$HOME/.rex"
         remote_script = f"{script_dir}/rex-exec-{script_id}.sh"
+        remote_cmd = f"{script_dir}/rex-exec-{script_id}.cmd"
 
-        # Build script
-        builder = ScriptBuilder().shebang(login=True)
+        # Build setup prefix
+        prefix_lines = ["#!/bin/bash -l"]
         if ctx.modules:
-            builder.module_load(ctx.modules)
+            prefix_lines.append(f"module load {' '.join(ctx.modules)}")
         for key, value in ctx.env.items():
-            builder.export(key, value)
+            prefix_lines.append(f"export {key}={repr(value)}")
         if ctx.code_dir:
-            builder.source(f"{ctx.code_dir}/.venv/bin/activate")
+            prefix_lines.append(f"source {ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
-            builder.cd(ctx.run_dir)
-        builder.run_command(cmd)
+            prefix_lines.append(f"cd {ctx.run_dir}")
+        # Source the command file to preserve quoting
+        prefix_lines.append(f"source {remote_cmd}")
 
-        script_content = builder.build()
+        script_content = "\n".join(prefix_lines) + "\n"
 
-        # Write script to remote
+        # Write command to separate file using heredoc (preserves all quoting)
         self.ssh.exec(f"mkdir -p {script_dir}")
+        write_cmd = f"""cat > {remote_cmd} << 'REXCMD'
+{cmd}
+REXCMD"""
+        code, _, stderr = self.ssh.exec(write_cmd)
+        if code != 0:
+            warn(f"Failed to write command: {stderr}")
+            return code
+
+        # Write wrapper script
         _ssh_write(self.ssh, script_content, remote_script, chmod="+x")
 
         # Execute via srun (force TTY for proper signal forwarding)
         slurm_opts = self._build_slurm_opts()
         exit_code = self.ssh.exec_streaming(
-            f"srun{slurm_opts} {remote_script}; _e=$?; rm -f {remote_script}; exit $_e",
+            f"srun{slurm_opts} {remote_script}; _e=$?; rm -f {remote_script} {remote_cmd}; exit $_e",
             tty=True,
         )
 
