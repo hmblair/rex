@@ -12,6 +12,49 @@ from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id, job_pattern
 
 
+def _run_detached_nohup(
+    ssh: SSHExecutor,
+    bash_cmd: str,
+    log_path: str,
+    job_name: str,
+    *,
+    login_shell: bool = False,
+    show_status: bool = False,
+) -> JobInfo:
+    """Run command detached via nohup and return JobInfo.
+
+    Args:
+        ssh: SSH executor.
+        bash_cmd: Command to run (will be passed to bash -c).
+        log_path: Remote path for output log.
+        job_name: Job identifier.
+        login_shell: Use bash -l (login shell).
+        show_status: Print status command hint.
+    """
+    shell_flag = "-l -c" if login_shell else "-c"
+    nohup_cmd = (
+        f"nohup bash {shell_flag} '{bash_cmd}' > {log_path} 2>&1 & "
+        f"pid=$!; disown $pid 2>/dev/null; sleep 0.5; echo $pid"
+    )
+
+    _, stdout, _ = ssh.exec(nohup_cmd)
+    pid = int(stdout.strip()) if stdout.strip() else None
+
+    target = ssh.target
+    success(f"Detached: {job_name} (PID {pid})")
+    if show_status:
+        print(f"Status: rex {target} --status {job_name}")
+    print(f"Log:    rex {target} --log {job_name}")
+    print(f"Kill:   rex {target} --kill {job_name}")
+
+    return JobInfo(
+        job_id=job_name,
+        log_path=log_path,
+        is_slurm=False,
+        pid=pid,
+    )
+
+
 class DirectExecutor:
     """Direct SSH execution (non-SLURM).
 
@@ -97,25 +140,8 @@ class DirectExecutor:
             f'elif [ $code -ne 0 ]; then echo "[rex] Exit code: $code" >&2; fi; }}'
         )
 
-        # Run detached with nohup
-        cmd = (
-            f"nohup bash -c '{wrapper}' > {remote_log} 2>&1 & "
-            f"pid=$!; disown $pid 2>/dev/null; sleep 0.5; echo $pid"
-        )
-
-        code, stdout, _ = self.ssh.exec(cmd)
-        pid = int(stdout.strip()) if stdout.strip() else None
-
-        target = self.ssh.target
-        success(f"Detached: {job_name} (PID {pid})")
-        print(f"Status: rex {target} --status {job_name}")
-        print(f"Log:    rex {target} --log {job_name}")
-        print(f"Kill:   rex {target} --kill {job_name}")
-        return JobInfo(
-            job_id=job_name,
-            log_path=remote_log,
-            is_slurm=False,
-            pid=pid,
+        return _run_detached_nohup(
+            self.ssh, wrapper, remote_log, job_name, show_status=True
         )
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
@@ -169,27 +195,11 @@ chmod +x {remote_cmd}"""
 
         full_cmd = prefix + cmd
 
-        # Escape single quotes
+        # Escape single quotes for bash -c
         escaped_cmd = full_cmd.replace("'", "'\\''")
 
-        # Run detached with login shell
-        ssh_cmd = (
-            f"nohup bash -l -c '{escaped_cmd}' > {remote_log} 2>&1 & "
-            f"pid=$!; disown $pid 2>/dev/null; sleep 0.5; echo $pid"
-        )
-
-        code, stdout, _ = self.ssh.exec(ssh_cmd)
-        pid = int(stdout.strip()) if stdout.strip() else None
-
-        target = self.ssh.target
-        success(f"Detached: {job_name} (PID {pid})")
-        print(f"Log:    rex {target} --log {job_name}")
-        print(f"Kill:   rex {target} --kill {job_name}")
-        return JobInfo(
-            job_id=job_name,
-            log_path=remote_log,
-            is_slurm=False,
-            pid=pid,
+        return _run_detached_nohup(
+            self.ssh, escaped_cmd, remote_log, job_name, login_shell=True
         )
 
     def list_jobs(self, target: str) -> list[JobStatus]:
