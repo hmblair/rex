@@ -184,6 +184,25 @@ class SbatchBuilder(ScriptBuilder):
         """Set time limit."""
         return self.sbatch_option("time", limit)
 
+    def rex_header(self, description: str) -> Self:
+        """Add standard rex job header."""
+        self.blank_line()
+        self.run_command('echo "[rex] Running: $(date)"')
+        self.run_command('echo "[rex] Host: $(hostname)"')
+        self.run_command(f'echo "[rex] {description}"')
+        self.run_command('echo "---"')
+        return self
+
+    def rex_footer(self) -> Self:
+        """Add standard rex job footer with exit code handling."""
+        self.blank_line()
+        self.run_command('_rex_exit=$?')
+        self.run_command('echo "---"')
+        self.run_command('echo "[rex] Finished: $(date)"')
+        self.run_command('echo "[rex] Exit code: $_rex_exit"')
+        self.run_command('exit $_rex_exit')
+        return self
+
     def build(self) -> str:
         """Return complete sbatch script."""
         # Ensure shebang is first

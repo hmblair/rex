@@ -167,12 +167,7 @@ class SlurmExecutor:
         builder.open_mode("append")
         self._apply_options_to_builder(builder)
 
-        builder.blank_line()
-        builder.run_command('echo "[rex] Running: $(date)"')
-        builder.run_command('echo "[rex] Host: $(hostname)"')
-        builder.run_command(f'echo "[rex] Script: {remote_script}"')
-        builder.run_command('echo "---"')
-
+        builder.rex_header(f"Script: {remote_script}")
         builder.apply_context(ctx, mkdir_run_dir=True)
 
         builder.blank_line()
@@ -182,12 +177,7 @@ class SlurmExecutor:
             python_cmd += f" {args_str}"
         builder.run_command(python_cmd)
 
-        builder.blank_line()
-        builder.run_command('_rex_exit=$?')
-        builder.run_command('echo "---"')
-        builder.run_command('echo "[rex] Finished: $(date)"')
-        builder.run_command('echo "[rex] Exit code: $_rex_exit"')
-        builder.run_command('exit $_rex_exit')
+        builder.rex_footer()
 
         sbatch_content = builder.build()
 
@@ -304,23 +294,13 @@ REXCMD"""
         builder.open_mode("append")
         self._apply_options_to_builder(builder)
 
-        builder.blank_line()
-        builder.run_command('echo "[rex] Running: $(date)"')
-        builder.run_command('echo "[rex] Host: $(hostname)"')
-        builder.run_command(f'echo "[rex] Command: {cmd}"')
-        builder.run_command('echo "---"')
-
+        builder.rex_header(f"Command: {cmd}")
         builder.apply_context(ctx)
 
         builder.blank_line()
         builder.run_command(cmd)
 
-        builder.blank_line()
-        builder.run_command('_rex_exit=$?')
-        builder.run_command('echo "---"')
-        builder.run_command('echo "[rex] Finished: $(date)"')
-        builder.run_command('echo "[rex] Exit code: $_rex_exit"')
-        builder.run_command('exit $_rex_exit')
+        builder.rex_footer()
 
         sbatch_content = builder.build()
 
