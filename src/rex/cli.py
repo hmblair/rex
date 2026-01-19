@@ -284,6 +284,10 @@ def _main(argv: list[str] | None = None) -> int:
     # Get host config for the alias
     host_config = global_config.get_host_config(alias_name) if alias_name else None
 
+    # Apply default_slurm from host config
+    if host_config and host_config.default_slurm and not args.slurm:
+        args.slurm = True
+
     # Set debug mode
     global DEBUG
     DEBUG = args.debug

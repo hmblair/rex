@@ -25,6 +25,7 @@ KNOWN_HOST_FIELDS = {
     "constraint",
     "prefer",
     "default_gpu",
+    "default_slurm",
     "env",
 }
 
@@ -45,6 +46,7 @@ class HostConfig:
     constraint: str | None = None
     prefer: str | None = None
     default_gpu: bool = False
+    default_slurm: bool = False
     env: dict[str, str] = field(default_factory=dict)
 
 
@@ -106,6 +108,7 @@ class GlobalConfig:
                 constraint=host_data.get("constraint"),
                 prefer=host_data.get("prefer"),
                 default_gpu=host_data.get("default_gpu", False),
+                default_slurm=host_data.get("default_slurm", False),
                 env=host_data.get("env", {}),
             )
 
