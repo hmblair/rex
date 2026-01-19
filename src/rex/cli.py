@@ -91,6 +91,7 @@ Examples:
 
     parser.add_argument("--build", action="store_true", help="Build venv on remote")
     parser.add_argument("--exec", dest="exec_cmd", metavar="CMD", help="Execute shell command")
+    parser.add_argument("--exec-code-dir", dest="exec_code_dir", metavar="CMD", help="Execute in code_dir")
     parser.add_argument("--exec-login", dest="exec_login", metavar="CMD", help="Execute on login node")
     parser.add_argument("--read", dest="read_path", metavar="PATH", help="Read file or list directory")
 
@@ -442,6 +443,16 @@ def _main(argv: list[str] | None = None) -> int:
     if args.exec_cmd:
         from rex.commands.exec import exec_command
         result = exec_command(executor, ctx, args.exec_cmd, args.detach, args.name)
+        if isinstance(result, int):
+            return result
+        return 0
+
+    if args.exec_code_dir:
+        from dataclasses import replace
+        from rex.commands.exec import exec_command
+        # Use code_dir as working directory instead of run_dir
+        code_ctx = replace(ctx, run_dir=ctx.code_dir)
+        result = exec_command(executor, code_ctx, args.exec_code_dir, args.detach, args.name)
         if isinstance(result, int):
             return result
         return 0
