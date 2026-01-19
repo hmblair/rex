@@ -54,57 +54,67 @@ rex user@host --disconnect
 
 ## Configuration
 
-### Aliases (`~/.config/rex`)
+### Global Config (`~/.config/rex/config.toml`)
 
-Define shortcuts for frequently used hosts:
+Define host aliases and per-host defaults:
 
+```toml
+[aliases]
+sherlock = "user@login.sherlock.stanford.edu"
+imp = "user@imp"
+
+[hosts.sherlock]
+code_dir = "/home/groups/lab/user"      # base path, project name appended
+run_dir = "/scratch/users/user"         # base path, project name appended
+modules = ["python/3.12", "cuda/12.4"]
+cpu_partition = "normal"
+gpu_partition = "gpu"
+gres = "gpu:1"
+time = "8:00:00"
+prefer = "GPU_SKU:H100_SXM5"
+default_slurm = true                    # always use SLURM for this host
+
+[hosts.sherlock.env]
+MY_VAR = "value"
+
+[hosts.imp]
+code_dir = "/home/user"
+run_dir = "/tmp/user"
+# No SLURM settings (direct SSH)
 ```
-gpu = user@gpu.server.com -p /opt/python3.12
-cluster = user@login.cluster.edu --slurm --partition gpu --gres gpu:1
-```
 
-Then use: `rex gpu train.py`
+Then use: `rex sherlock train.py`
 
 ### Project Config (`.rex.toml`)
 
-Place in your project root:
+Place in your project root. Only `name` is required:
 
 ```toml
-host = "user@cluster.edu"
-code_dir = "/home/user/projects/myproject"
-run_dir = "/scratch/user/myproject"
-modules = ["python/3.12", "cuda/12.0"]
+name = "myproject"
 
-# SLURM partitions
-cpu_partition = "normal"
-gpu_partition = "gpu"
+# Optional overrides (inherit from host config if not specified)
+time = "12:00:00"                       # override host default
+modules = ["python/3.12", "special/1.0"] # replaces host modules if specified
 
-# SLURM resources
-gres = "gpu:1"
-time = "2:00:00"
-cpus = 4
-mem = "16G"
-constraint = "GPU_SKU:A100_SXM4"
-prefer = "GPU_SKU:H100_SXM5"
-
-# Environment variables
 [env]
-CUDA_VISIBLE_DEVICES = "0"
-MY_VAR = "value"
-
-# Optional: default to GPU partition (default: false)
-default_gpu = false
+PROJECT_VAR = "value"
 ```
 
-With a project config, you can run commands without specifying the host:
+Paths are computed automatically:
+- `code_dir` = `/home/groups/lab/user/myproject`
+- `run_dir` = `/scratch/users/user/myproject`
+
+Config merge priority: CLI args > project .rex.toml > host config > defaults
+
+### Usage with Project Config
 
 ```bash
 cd myproject/
-rex --sync              # syncs to code_dir
-rex -s train.py         # uses cpu_partition (default)
-rex -s --gpu train.py   # uses gpu_partition
-rex --build             # builds on cpu_partition
-rex --build --gpu       # builds on gpu_partition
+rex sherlock --sync       # syncs to code_dir
+rex sherlock train.py     # uses cpu_partition (default)
+rex sherlock --gpu train.py  # uses gpu_partition
+rex sherlock --build      # builds on cpu_partition
+rex sherlock --build --gpu   # builds on gpu_partition
 ```
 
 ## Commands
