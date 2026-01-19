@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -115,6 +116,7 @@ class SSHExecutor:
 
         Inherits parent's stdio for real-time output.
         tty=None means auto-detect from sys.stdin.isatty().
+        Handles SIGINT by forwarding to subprocess.
 
         Returns exit code.
         """
@@ -127,12 +129,27 @@ class SSHExecutor:
 
         ssh_args = ["ssh", *self._opts]
         if tty:
-            ssh_args.append("-t")
+            # Use -tt to force TTY allocation even without local terminal
+            ssh_args.append("-tt")
         ssh_args.extend([self.target, wrapped])
 
-        result = subprocess.run(ssh_args)
-        debug(f"[ssh] exit={result.returncode}")
-        return result.returncode
+        proc = subprocess.Popen(ssh_args)
+
+        # Set up signal handler to forward SIGINT to subprocess
+        original_handler = signal.getsignal(signal.SIGINT)
+
+        def sigint_handler(signum: int, frame: object) -> None:
+            if proc.poll() is None:  # Process still running
+                proc.send_signal(signal.SIGINT)
+
+        try:
+            signal.signal(signal.SIGINT, sigint_handler)
+            proc.wait()
+        finally:
+            signal.signal(signal.SIGINT, original_handler)
+
+        debug(f"[ssh] exit={proc.returncode}")
+        return proc.returncode
 
     def exec_script(
         self,
@@ -178,6 +195,7 @@ class SSHExecutor:
         """Execute script with streaming output.
 
         Like exec_script but inherits stdio for interactive use.
+        Handles SIGINT by forwarding to subprocess.
         """
         debug(f"[ssh] exec_script_streaming: {len(script)} bytes, login_shell={login_shell}")
 
@@ -195,17 +213,30 @@ class SSHExecutor:
 
         ssh_args = ["ssh", *self._opts]
         if tty:
-            ssh_args.append("-t")
+            # Use -tt to force TTY allocation even without local terminal
+            ssh_args.append("-tt")
         ssh_args.extend([self.target, wrapper])
 
-        # Use Popen for streaming stdin
         proc = subprocess.Popen(
             ssh_args,
             stdin=subprocess.PIPE,
             stdout=None,  # Inherit
             stderr=None,  # Inherit
         )
-        proc.communicate(input=script.encode())
+
+        # Set up signal handler to forward SIGINT to subprocess
+        original_handler = signal.getsignal(signal.SIGINT)
+
+        def sigint_handler(signum: int, frame: object) -> None:
+            if proc.poll() is None:  # Process still running
+                proc.send_signal(signal.SIGINT)
+
+        try:
+            signal.signal(signal.SIGINT, sigint_handler)
+            proc.communicate(input=script.encode())
+        finally:
+            signal.signal(signal.SIGINT, original_handler)
+
         debug(f"[ssh] exit={proc.returncode}")
         return proc.returncode
 

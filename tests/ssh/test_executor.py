@@ -337,37 +337,42 @@ class TestSSHExecutorExecStreaming:
 
     def test_exec_streaming_returns_code(self, mocker):
         """exec_streaming() returns exit code."""
-        mock_run = mocker.patch("subprocess.run")
-        mock_run.return_value = MagicMock(returncode=0)
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.poll.return_value = 0  # Process finished
+        mock_popen = mocker.patch("subprocess.Popen", return_value=mock_proc)
 
         executor = SSHExecutor("user@host")
-        # Mock stdin.isatty()
         mocker.patch("sys.stdin.isatty", return_value=False)
 
         code = executor.exec_streaming("echo hello")
         assert code == 0
 
     def test_exec_streaming_with_tty(self, mocker):
-        """exec_streaming() adds -t when tty=True."""
-        mock_run = mocker.patch("subprocess.run")
-        mock_run.return_value = MagicMock(returncode=0)
+        """exec_streaming() adds -tt when tty=True."""
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.poll.return_value = 0
+        mock_popen = mocker.patch("subprocess.Popen", return_value=mock_proc)
 
         executor = SSHExecutor("user@host")
         executor.exec_streaming("echo hello", tty=True)
 
-        args = mock_run.call_args[0][0]
-        assert "-t" in args
+        args = mock_popen.call_args[0][0]
+        assert "-tt" in args
 
     def test_exec_streaming_without_tty(self, mocker):
-        """exec_streaming() omits -t when tty=False."""
-        mock_run = mocker.patch("subprocess.run")
-        mock_run.return_value = MagicMock(returncode=0)
+        """exec_streaming() omits -tt when tty=False."""
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.poll.return_value = 0
+        mock_popen = mocker.patch("subprocess.Popen", return_value=mock_proc)
 
         executor = SSHExecutor("user@host")
         executor.exec_streaming("echo hello", tty=False)
 
-        args = mock_run.call_args[0][0]
-        assert "-t" not in args
+        args = mock_popen.call_args[0][0]
+        assert "-tt" not in args
 
 
 class TestSSHExecutorExecScript:

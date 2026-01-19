@@ -129,11 +129,11 @@ class SlurmExecutor:
         # Write wrapper to remote
         _ssh_write(self.ssh, wrapper, remote_sh, chmod="+x")
 
-        # Execute via srun
+        # Execute via srun (force TTY for proper signal forwarding)
         slurm_opts = self._build_slurm_opts()
         exit_code = self.ssh.exec_streaming(
             f"srun{slurm_opts} {remote_sh}; _e=$?; rm -f {remote_py} {remote_sh}; exit $_e",
-            tty=None,
+            tty=True,
         )
 
         return exit_code
@@ -276,11 +276,11 @@ class SlurmExecutor:
         self.ssh.exec(f"mkdir -p {script_dir}")
         _ssh_write(self.ssh, script_content, remote_script, chmod="+x")
 
-        # Execute via srun
+        # Execute via srun (force TTY for proper signal forwarding)
         slurm_opts = self._build_slurm_opts()
         exit_code = self.ssh.exec_streaming(
             f"srun{slurm_opts} {remote_script}; _e=$?; rm -f {remote_script}; exit $_e",
-            tty=None,
+            tty=True,
         )
 
         return exit_code
