@@ -78,8 +78,19 @@ modules = ["python/3.12", "cuda/12.0"]
 # SLURM partitions
 cpu_partition = "normal"
 gpu_partition = "gpu"
+
+# SLURM resources
 gres = "gpu:1"
 time = "2:00:00"
+cpus = 4
+mem = "16G"
+constraint = "a100"
+prefer = "fast"
+
+# Environment variables
+[env]
+CUDA_VISIBLE_DEVICES = "0"
+MY_VAR = "value"
 
 # Optional: default to GPU partition (default: false)
 default_gpu = false
@@ -105,6 +116,8 @@ rex --build --gpu       # builds on gpu_partition
 | `rex host -d script.py` | Run detached (background) |
 | `rex host -s -d script.py` | Submit via sbatch |
 | `rex host --exec "cmd"` | Run shell command |
+| `rex host --exec-login "cmd"` | Run command on login node |
+| `rex host --read PATH` | Read file or list directory |
 | `rex host --jobs` | List all jobs |
 | `rex host --status JOB` | Check job status |
 | `rex host --log JOB [-f]` | Show job log (follow with -f) |
@@ -134,8 +147,15 @@ rex --build --gpu       # builds on gpu_partition
 | `--partition NAME` | SLURM partition (overrides --gpu/--cpu) |
 | `--gres SPEC` | SLURM GPU resources |
 | `--time LIMIT` | SLURM time limit |
+| `--cpus N` | SLURM CPUs per task |
+| `--mem SIZE` | SLURM memory (e.g., 4G, 16000M) |
+| `--constraint NAME` | SLURM node constraint |
+| `--prefer NAME` | SLURM node preference (soft) |
 | `--last` | Use most recent job |
 | `--json` | JSON output |
+| `-f, --follow` | Follow log output |
+| `--wait` | Wait for build to complete |
+| `--clean` | Clean venv before build |
 | `--debug` | Enable verbose SSH output |
 
 ## Shell Completions
