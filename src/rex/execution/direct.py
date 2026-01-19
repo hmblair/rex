@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import time
 from pathlib import Path
 
@@ -79,8 +80,6 @@ class DirectExecutor:
 
         code, _, _ = self.ssh.exec(f"cat > {remote_py}")
         # Actually send the content via stdin
-        import subprocess
-
         subprocess.run(
             ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_py}"],
             input=script_content.encode(),
@@ -117,8 +116,6 @@ class DirectExecutor:
         remote_log = f"/tmp/rex-{job_name}.log"
 
         # Copy script via scp
-        import subprocess
-
         subprocess.run(
             ["scp", "-q", str(script_path), f"{self.ssh.target}:{remote_script}"],
             check=True,

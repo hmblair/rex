@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import time
 
 from rex.config.project import ProjectConfig
@@ -78,7 +79,6 @@ echo "Finished: $(date)"
     info(f"Building in {project.code_dir}")
 
     # Write script
-    import subprocess
     subprocess.run(
         ["ssh", *ssh._opts, ssh.target, f"cat > {remote_script} && chmod +x {remote_script}"],
         input=script_content.encode(),
