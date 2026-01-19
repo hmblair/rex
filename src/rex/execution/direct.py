@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import shlex
 import time
 from pathlib import Path
 
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
-from rex.execution.script import ScriptBuilder
+from rex.execution.script import ScriptBuilder, build_context_commands
 from rex.output import success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id, job_pattern
@@ -47,14 +46,7 @@ class DirectExecutor:
 
         # Build wrapper script
         builder = ScriptBuilder().shebang(login=True)
-        if ctx.modules:
-            builder.module_load(ctx.modules)
-        for key, value in ctx.env.items():
-            builder.export(key, value)
-        if ctx.code_dir:
-            builder.source(f"{ctx.code_dir}/.venv/bin/activate")
-        if ctx.run_dir:
-            builder.cd(ctx.run_dir)
+        builder.apply_context(ctx)
         builder.run_python(ctx.python, remote_py, args)
 
         wrapper = builder.build()
@@ -90,15 +82,8 @@ class DirectExecutor:
         )
 
         # Build command
-        env_prefix = ""
-        if ctx.modules:
-            env_prefix += f"module load {' '.join(ctx.modules)}; "
-        for key, value in ctx.env.items():
-            env_prefix += f"export {key}={shlex.quote(value)}; "
-        if ctx.code_dir:
-            env_prefix += f"source {ctx.code_dir}/.venv/bin/activate; "
-        if ctx.run_dir:
-            env_prefix += f"mkdir -p {ctx.run_dir} && cd {ctx.run_dir}; "
+        context_cmds = build_context_commands(ctx, mkdir_run_dir=True)
+        env_prefix = "; ".join(context_cmds) + "; " if context_cmds else ""
 
         args_str = " ".join(f"'{a}'" for a in args) if args else ""
         python_cmd = f"{ctx.python} -u {remote_script}"
@@ -145,17 +130,8 @@ class DirectExecutor:
         remote_cmd = f"/tmp/rex-exec-{script_id}.sh"
 
         # Build setup prefix
-        prefix_lines = []
-        if ctx.modules:
-            prefix_lines.append(f"module load {' '.join(ctx.modules)}")
-        for key, value in ctx.env.items():
-            prefix_lines.append(f"export {key}={shlex.quote(value)}")
-        if ctx.code_dir:
-            prefix_lines.append(f"source {ctx.code_dir}/.venv/bin/activate")
-        if ctx.run_dir:
-            prefix_lines.append(f"cd {ctx.run_dir}")
-
-        prefix = "\n".join(prefix_lines) + "\n" if prefix_lines else ""
+        context_cmds = build_context_commands(ctx)
+        prefix = "\n".join(context_cmds) + "\n" if context_cmds else ""
 
         # Write command to temp file using heredoc (preserves all quoting)
         # The quoted 'REXCMD' prevents any shell interpretation
@@ -188,15 +164,8 @@ chmod +x {remote_cmd}"""
         remote_log = f"/tmp/rex-{job_name}.log"
 
         # Build prefix
-        prefix = ""
-        if ctx.modules:
-            prefix += f"module load {' '.join(ctx.modules)} && "
-        for key, value in ctx.env.items():
-            prefix += f"export {key}={shlex.quote(value)} && "
-        if ctx.code_dir:
-            prefix += f"source {ctx.code_dir}/.venv/bin/activate && "
-        if ctx.run_dir:
-            prefix += f"cd {ctx.run_dir} && "
+        context_cmds = build_context_commands(ctx)
+        prefix = " && ".join(context_cmds) + " && " if context_cmds else ""
 
         full_cmd = prefix + cmd
 

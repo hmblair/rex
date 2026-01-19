@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shlex
 import subprocess
 import time
 from dataclasses import dataclass
@@ -10,7 +9,7 @@ from pathlib import Path
 
 from rex.exceptions import SSHError
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
-from rex.execution.script import SbatchBuilder, ScriptBuilder
+from rex.execution.script import SbatchBuilder, ScriptBuilder, build_context_commands
 from rex.output import debug, error, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id
@@ -115,14 +114,7 @@ class SlurmExecutor:
 
         # Build wrapper script
         builder = ScriptBuilder().shebang(login=True)
-        if ctx.modules:
-            builder.module_load(ctx.modules)
-        for key, value in ctx.env.items():
-            builder.export(key, value)
-        if ctx.code_dir:
-            builder.source(f"{ctx.code_dir}/.venv/bin/activate")
-        if ctx.run_dir:
-            builder.cd(ctx.run_dir)
+        builder.apply_context(ctx)
         builder.run_python(ctx.python, remote_py, args)
 
         wrapper = builder.build()
@@ -181,14 +173,7 @@ class SlurmExecutor:
         builder.run_command(f'echo "[rex] Script: {remote_script}"')
         builder.run_command('echo "---"')
 
-        if ctx.modules:
-            builder.module_load(ctx.modules)
-        for key, value in ctx.env.items():
-            builder.export(key, value)
-        if ctx.code_dir:
-            builder.source(f"{ctx.code_dir}/.venv/bin/activate")
-        if ctx.run_dir:
-            builder.run_command(f"mkdir -p {ctx.run_dir} && cd {ctx.run_dir}")
+        builder.apply_context(ctx, mkdir_run_dir=True)
 
         builder.blank_line()
         args_str = " ".join(f"'{a}'" for a in args) if args else ""
@@ -266,18 +251,8 @@ class SlurmExecutor:
         remote_cmd = f"{script_dir}/rex-exec-{script_id}.cmd"
 
         # Build setup prefix
-        prefix_lines = ["#!/bin/bash -l"]
-        if ctx.modules:
-            prefix_lines.append(f"module load {' '.join(ctx.modules)}")
-        for key, value in ctx.env.items():
-            prefix_lines.append(f"export {key}={shlex.quote(value)}")
-        if ctx.code_dir:
-            prefix_lines.append(f"source {ctx.code_dir}/.venv/bin/activate")
-        if ctx.run_dir:
-            prefix_lines.append(f"cd {ctx.run_dir}")
-        # Source the command file to preserve quoting
-        prefix_lines.append(f"source {remote_cmd}")
-
+        context_cmds = build_context_commands(ctx)
+        prefix_lines = ["#!/bin/bash -l"] + context_cmds + [f"source {remote_cmd}"]
         script_content = "\n".join(prefix_lines) + "\n"
 
         # Write command to separate file using heredoc (preserves all quoting)
@@ -335,14 +310,7 @@ REXCMD"""
         builder.run_command(f'echo "[rex] Command: {cmd}"')
         builder.run_command('echo "---"')
 
-        if ctx.modules:
-            builder.module_load(ctx.modules)
-        for key, value in ctx.env.items():
-            builder.export(key, value)
-        if ctx.code_dir:
-            builder.source(f"{ctx.code_dir}/.venv/bin/activate")
-        if ctx.run_dir:
-            builder.cd(ctx.run_dir)
+        builder.apply_context(ctx)
 
         builder.blank_line()
         builder.run_command(cmd)
