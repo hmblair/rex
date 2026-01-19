@@ -173,6 +173,8 @@ def merge_configs(
     time = pick(args.time, project.time if project else None, hc.time)
     cpus = pick(args.cpus, project.cpus if project else None, hc.cpus)
     mem = pick(args.mem, project.mem if project else None, hc.mem)
+    # Host-level constraint/prefer are typically GPU-specific (e.g., GPU_SKU:H100),
+    # so only apply them on GPU jobs. CLI and project-level values always apply.
     constraint = pick(args.constraint, project.constraint if project else None, hc.constraint if use_gpu else None)
     prefer = pick(args.prefer, project.prefer if project else None, hc.prefer if use_gpu else None)
 
