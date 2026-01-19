@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
-from rex.execution.script import ScriptBuilder, build_context_commands
+from rex.execution.script import ScriptBuilder, build_context_commands, get_log_path as _get_log_path
 from rex.output import success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id, job_pattern
@@ -248,12 +248,7 @@ done
 
     def get_log_path(self, target: str, job_id: str) -> str | None:
         """Get log file path for a job."""
-        cmd = (
-            f'if [ -f ~/.rex/rex-{job_id}.log ]; then echo ~/.rex/rex-{job_id}.log; '
-            f'elif [ -f /tmp/rex-{job_id}.log ]; then echo /tmp/rex-{job_id}.log; fi'
-        )
-        code, stdout, _ = self.ssh.exec(cmd)
-        return stdout.strip() if stdout.strip() else None
+        return _get_log_path(self.ssh, job_id)
 
     def kill_job(self, target: str, job_id: str) -> bool:
         """Kill a running job."""

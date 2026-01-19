@@ -7,7 +7,21 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rex.execution.base import ExecutionContext
+    from rex.ssh.executor import SSHExecutor
     from typing_extensions import Self
+
+
+def get_log_path(ssh: "SSHExecutor", job_id: str) -> str | None:
+    """Get log file path for a job.
+
+    Checks ~/.rex/ first, then /tmp/.
+    """
+    cmd = (
+        f'if [ -f ~/.rex/rex-{job_id}.log ]; then echo ~/.rex/rex-{job_id}.log; '
+        f'elif [ -f /tmp/rex-{job_id}.log ]; then echo /tmp/rex-{job_id}.log; fi'
+    )
+    _, stdout, _ = ssh.exec(cmd)
+    return stdout.strip() if stdout.strip() else None
 
 
 def build_context_commands(

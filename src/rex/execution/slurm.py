@@ -9,7 +9,7 @@ from pathlib import Path
 
 from rex.exceptions import SSHError
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
-from rex.execution.script import SbatchBuilder, ScriptBuilder, build_context_commands
+from rex.execution.script import SbatchBuilder, ScriptBuilder, build_context_commands, get_log_path as _get_log_path
 from rex.output import debug, error, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id
@@ -408,12 +408,7 @@ REXCMD"""
 
     def get_log_path(self, target: str, job_id: str) -> str | None:
         """Get log file path."""
-        cmd = (
-            f'if [ -f ~/.rex/rex-{job_id}.log ]; then echo ~/.rex/rex-{job_id}.log; '
-            f'elif [ -f /tmp/rex-{job_id}.log ]; then echo /tmp/rex-{job_id}.log; fi'
-        )
-        code, stdout, _ = self.ssh.exec(cmd)
-        return stdout.strip() if stdout.strip() else None
+        return _get_log_path(self.ssh, job_id)
 
     def kill_job(self, target: str, job_id: str) -> bool:
         """Cancel SLURM job."""
