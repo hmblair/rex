@@ -10,7 +10,7 @@ from pathlib import Path
 from rex.exceptions import SSHError
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
 from rex.execution.script import SbatchBuilder, ScriptBuilder
-from rex.output import debug, success, warn
+from rex.output import debug, error, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name, generate_script_id
 
@@ -253,6 +253,11 @@ class SlurmExecutor:
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command via srun."""
+        # Check for heredoc delimiter collision
+        if "\nREXCMD\n" in f"\n{cmd}\n":
+            error("Command contains 'REXCMD' as a line, which conflicts with internal delimiter")
+            return 1
+
         debug(f"[slurm] exec_foreground: {cmd[:80]}{'...' if len(cmd) > 80 else ''}")
         script_id = generate_script_id()
         script_dir = ctx.run_dir or "$HOME/.rex"

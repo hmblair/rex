@@ -131,6 +131,12 @@ class DirectExecutor:
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command in foreground."""
+        # Check for heredoc delimiter collision
+        if "\nREXCMD\n" in f"\n{cmd}\n":
+            from rex.output import error
+            error("Command contains 'REXCMD' as a line, which conflicts with internal delimiter")
+            return 1
+
         script_id = generate_script_id()
         remote_cmd = f"/tmp/rex-exec-{script_id}.sh"
 
