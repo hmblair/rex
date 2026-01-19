@@ -20,7 +20,7 @@ def build(
 ) -> int:
     """Create/update venv on remote.
 
-    Requires .rex.toml with code_dir.
+    Requires code_dir (from project config or host config).
     Submits build job via sbatch.
     use_gpu: If True, use gpu_partition; otherwise use cpu_partition.
 
@@ -29,7 +29,7 @@ def build(
         SlurmError: If job submission or build fails.
     """
     if not project.code_dir:
-        raise ConfigError("No .rex.toml found with code_dir")
+        raise ConfigError("code_dir not configured")
 
     from rex.utils import generate_job_name
     job = f"build-{generate_job_name()}"
