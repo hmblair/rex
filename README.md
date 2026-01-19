@@ -84,8 +84,8 @@ gres = "gpu:1"
 time = "2:00:00"
 cpus = 4
 mem = "16G"
-constraint = "a100"
-prefer = "fast"
+constraint = "GPU_SKU:A100_SXM4"
+prefer = "GPU_SKU:H100_SXM5"
 
 # Environment variables
 [env]
