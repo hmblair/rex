@@ -33,6 +33,77 @@ class TestShellQuote:
         result = _shell_quote("echo $HOME; rm -rf /")
         assert result == "'echo $HOME; rm -rf /'"
 
+    def test_double_quotes(self):
+        """Double quotes are preserved inside single quotes."""
+        result = _shell_quote('echo "hello world"')
+        assert result == '\'echo "hello world"\''
+
+    def test_mixed_quotes(self):
+        """Mixed single and double quotes are handled."""
+        result = _shell_quote("echo \"it's working\"")
+        assert result == "'echo \"it'\\''s working\"'"
+
+    def test_dollar_sign_variable(self):
+        """Dollar signs are preserved (not expanded)."""
+        result = _shell_quote("echo $HOME $USER")
+        assert result == "'echo $HOME $USER'"
+
+    def test_backticks(self):
+        """Backticks are preserved."""
+        result = _shell_quote("echo `date`")
+        assert result == "'echo `date`'"
+
+    def test_pipe(self):
+        """Pipe characters are preserved."""
+        result = _shell_quote("ls -la | grep foo")
+        assert result == "'ls -la | grep foo'"
+
+    def test_semicolon(self):
+        """Semicolons are preserved."""
+        result = _shell_quote("cmd1; cmd2; cmd3")
+        assert result == "'cmd1; cmd2; cmd3'"
+
+    def test_ampersand(self):
+        """Ampersands are preserved."""
+        result = _shell_quote("cmd1 && cmd2 || cmd3")
+        assert result == "'cmd1 && cmd2 || cmd3'"
+
+    def test_backslash(self):
+        """Backslashes are preserved."""
+        result = _shell_quote("echo \\n\\t")
+        assert result == "'echo \\n\\t'"
+
+    def test_parentheses(self):
+        """Parentheses are preserved."""
+        result = _shell_quote("(cd /tmp && ls)")
+        assert result == "'(cd /tmp && ls)'"
+
+    def test_brackets(self):
+        """Brackets are preserved."""
+        result = _shell_quote("[[ -f /tmp/test ]] && echo yes")
+        assert result == "'[[ -f /tmp/test ]] && echo yes'"
+
+    def test_glob_characters(self):
+        """Glob characters are preserved."""
+        result = _shell_quote("ls *.py **/*.txt")
+        assert result == "'ls *.py **/*.txt'"
+
+    def test_multiple_single_quotes(self):
+        """Multiple single quotes are all escaped."""
+        result = _shell_quote("echo 'one' 'two' 'three'")
+        assert result == "'echo '\\''one'\\'' '\\''two'\\'' '\\''three'\\'''"
+
+    def test_newline(self):
+        """Newlines are preserved."""
+        result = _shell_quote("echo first\necho second")
+        assert result == "'echo first\necho second'"
+
+    def test_complex_command(self):
+        """Complex real-world command is properly quoted."""
+        cmd = '''for f in *.py; do echo "$f"; done'''
+        result = _shell_quote(cmd)
+        assert result == "'" + cmd + "'"
+
 
 class TestSSHExecutorInit:
     """Tests for SSHExecutor initialization."""
@@ -116,6 +187,148 @@ class TestSSHExecutorExec:
         args = mock_run.call_args[0][0]
         # Command should be wrapped
         assert "bash" in " ".join(args)
+
+
+class TestSSHExecutorExecSpecialChars:
+    """Tests for exec() with special characters."""
+
+    def test_exec_with_double_quotes(self, mocker):
+        """exec() preserves double quotes in command."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec('echo "hello world"')
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert '"hello world"' in cmd_str
+
+    def test_exec_with_single_quotes(self, mocker):
+        """exec() preserves single quotes in command."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("echo 'hello world'")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        # Single quotes should be escaped within the outer quotes
+        assert "hello world" in cmd_str
+
+    def test_exec_with_dollar_variable(self, mocker):
+        """exec() preserves dollar sign variables."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("echo $HOME $USER")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "$HOME" in cmd_str
+        assert "$USER" in cmd_str
+
+    def test_exec_with_pipe(self, mocker):
+        """exec() preserves pipe characters."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("ls -la | grep foo | wc -l")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "|" in cmd_str
+
+    def test_exec_with_semicolon(self, mocker):
+        """exec() preserves semicolons."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("cd /tmp; ls; pwd")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert ";" in cmd_str
+
+    def test_exec_with_ampersand(self, mocker):
+        """exec() preserves ampersands."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("cmd1 && cmd2 || cmd3")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "&&" in cmd_str
+        assert "||" in cmd_str
+
+    def test_exec_with_backticks(self, mocker):
+        """exec() preserves backticks."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("echo `date`")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "`" in cmd_str
+
+    def test_exec_with_backslash(self, mocker):
+        """exec() preserves backslashes."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("echo 'line1\\nline2'")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "\\" in cmd_str
+
+    def test_exec_with_parentheses(self, mocker):
+        """exec() preserves parentheses for subshells."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("(cd /tmp && ls)")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "(" in cmd_str
+        assert ")" in cmd_str
+
+    def test_exec_with_glob(self, mocker):
+        """exec() preserves glob patterns."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        executor.exec("ls *.py")
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "*" in cmd_str
+
+    def test_exec_with_complex_command(self, mocker):
+        """exec() handles complex real-world commands."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        executor = SSHExecutor("user@host")
+        cmd = '''for f in *.py; do echo "$f"; done'''
+        executor.exec(cmd)
+
+        args = mock_run.call_args[0][0]
+        cmd_str = " ".join(args)
+        assert "for" in cmd_str
+        assert "done" in cmd_str
         assert "--norc" in " ".join(args)
 
 
