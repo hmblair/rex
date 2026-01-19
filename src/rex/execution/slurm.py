@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import time
 from dataclasses import dataclass
@@ -269,7 +270,7 @@ class SlurmExecutor:
         if ctx.modules:
             prefix_lines.append(f"module load {' '.join(ctx.modules)}")
         for key, value in ctx.env.items():
-            prefix_lines.append(f"export {key}={repr(value)}")
+            prefix_lines.append(f"export {key}={shlex.quote(value)}")
         if ctx.code_dir:
             prefix_lines.append(f"source {ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:

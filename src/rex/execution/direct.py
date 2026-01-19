@@ -46,7 +46,9 @@ class DirectExecutor:
         )
 
         # Build wrapper script
-        builder = ScriptBuilder().shebang()
+        builder = ScriptBuilder().shebang(login=True)
+        if ctx.modules:
+            builder.module_load(ctx.modules)
         for key, value in ctx.env.items():
             builder.export(key, value)
         if ctx.code_dir:
@@ -89,12 +91,14 @@ class DirectExecutor:
 
         # Build command
         env_prefix = ""
+        if ctx.modules:
+            env_prefix += f"module load {' '.join(ctx.modules)}; "
         for key, value in ctx.env.items():
             env_prefix += f"export {key}={shlex.quote(value)}; "
         if ctx.code_dir:
             env_prefix += f"source {ctx.code_dir}/.venv/bin/activate; "
         if ctx.run_dir:
-            env_prefix += f"cd {ctx.run_dir}; "
+            env_prefix += f"mkdir -p {ctx.run_dir} && cd {ctx.run_dir}; "
 
         args_str = " ".join(f"'{a}'" for a in args) if args else ""
         python_cmd = f"{ctx.python} -u {remote_script}"
