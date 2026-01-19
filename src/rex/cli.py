@@ -18,7 +18,6 @@ from rex.utils import (
     validate_memory,
     validate_gres,
     validate_cpus,
-    validate_gpus,
 )
 
 # Global debug flag
@@ -63,7 +62,6 @@ Examples:
     parser.add_argument("-s", "--slurm", action="store_true", help="Use SLURM")
     parser.add_argument("-n", "--name", help="Job name for detached jobs")
     parser.add_argument("-p", "--python", default="python3", help="Python interpreter")
-    parser.add_argument("-g", "--gpus", help="CUDA_VISIBLE_DEVICES")
     parser.add_argument(
         "-m", "--module", action="append", dest="modules", default=[], help="Module to load"
     )
@@ -250,10 +248,10 @@ def _main(argv: list[str] | None = None) -> int:
     ctx = ExecutionContext(
         target=target,
         python=args.python,
-        gpus=args.gpus,
         modules=args.modules,
         code_dir=project.code_dir if project else None,
         run_dir=project.run_dir if project else None,
+        env=project.env if project else None,
     )
 
     # Validate job name if provided
@@ -273,8 +271,6 @@ def _main(argv: list[str] | None = None) -> int:
             validate_gres(gres)
         if args.cpus:
             validate_cpus(args.cpus)
-        if args.gpus:
-            validate_gpus(args.gpus)
     except ValueError as e:
         raise ValidationError(str(e))
 

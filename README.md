@@ -128,7 +128,6 @@ rex --build --gpu       # builds on gpu_partition
 | `-s, --slurm` | Use SLURM scheduler |
 | `-n, --name NAME` | Job name for detached jobs |
 | `-p, --python PATH` | Python interpreter path |
-| `-g, --gpus IDS` | Set CUDA_VISIBLE_DEVICES |
 | `-m, --module MOD` | Load module (repeatable) |
 | `--gpu` | Use GPU partition |
 | `--cpu` | Use CPU partition (override) |

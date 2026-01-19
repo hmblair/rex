@@ -76,6 +76,24 @@ default_gpu = true
         assert result.modules == []
         assert result.default_gpu is False
         assert result.cpus is None
+        assert result.env == {}
+
+    def test_load_env_section(self, tmp_path):
+        """Loads [env] section with environment variables."""
+        config = tmp_path / ".rex.toml"
+        config.write_text(
+            """
+host = "user@cluster"
+
+[env]
+MY_VAR = "value"
+PYTHONPATH = "/custom/path"
+"""
+        )
+
+        result = ProjectConfig._load(config)
+
+        assert result.env == {"MY_VAR": "value", "PYTHONPATH": "/custom/path"}
 
     def test_warns_on_unknown_fields(self, tmp_path, capsys):
         """Warns about unknown fields in config."""

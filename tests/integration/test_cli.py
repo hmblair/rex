@@ -60,12 +60,6 @@ class TestBuildParser:
         args = parser.parse_args(["user@host", "-p", "/opt/python3"])
         assert args.python == "/opt/python3"
 
-    def test_gpus_option(self):
-        """-g/--gpus option is parsed."""
-        parser = build_parser()
-        args = parser.parse_args(["user@host", "-g", "0,1"])
-        assert args.gpus == "0,1"
-
     def test_modules_option(self):
         """-m/--module option accumulates."""
         parser = build_parser()

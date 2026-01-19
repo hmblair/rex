@@ -11,7 +11,6 @@ from rex.utils import (
     validate_memory,
     validate_gres,
     validate_cpus,
-    validate_gpus,
     map_to_remote,
     job_pattern,
     generate_job_name,
@@ -223,41 +222,6 @@ class TestValidateCpus:
         """Negative CPUs is invalid."""
         with pytest.raises(ValueError):
             validate_cpus(-1)
-
-
-class TestValidateGpus:
-    """Tests for validate_gpus function."""
-
-    def test_valid_single(self):
-        """Single GPU index is valid."""
-        validate_gpus("0")
-        validate_gpus("7")
-
-    def test_valid_multiple(self):
-        """Multiple GPU indices are valid."""
-        validate_gpus("0,1")
-        validate_gpus("0,1,2,3")
-
-    def test_valid_empty(self):
-        """Empty string (all GPUs) is valid."""
-        validate_gpus("")
-
-    def test_invalid_non_numeric(self):
-        """Non-numeric values are rejected."""
-        with pytest.raises(ValueError) as exc_info:
-            validate_gpus("gpu0")
-        assert "Invalid GPU indices" in str(exc_info.value)
-
-    def test_invalid_duplicates(self):
-        """Duplicate indices are rejected."""
-        with pytest.raises(ValueError) as exc_info:
-            validate_gpus("0,1,0")
-        assert "contains duplicates" in str(exc_info.value)
-
-    def test_invalid_spaces(self):
-        """Spaces in format are rejected."""
-        with pytest.raises(ValueError):
-            validate_gpus("0, 1")
 
 
 class TestMapToRemote:

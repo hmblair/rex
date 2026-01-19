@@ -24,7 +24,6 @@ _rex() {
         '-d[Detach: run in background]'
         '(-n --name)'{-n,--name}'[Name for detached job]:name:'
         '-p[Python interpreter]:python path:_files'
-        '-g[Set CUDA_VISIBLE_DEVICES]:gpus:'
         '*-m[Load module (repeatable)]:module:'
         '(-s --slurm)'{-s,--slurm}'[Use SLURM for compute node execution]'
         '--gpu[Use GPU partition]'

@@ -24,6 +24,7 @@ KNOWN_FIELDS = {
     "constraint",
     "prefer",
     "default_gpu",
+    "env",
 }
 
 
@@ -45,6 +46,7 @@ class ProjectConfig:
     constraint: str | None = None
     prefer: str | None = None
     default_gpu: bool = False
+    env: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def find_and_load(cls, start_dir: Path | None = None) -> "ProjectConfig | None":
@@ -103,4 +105,5 @@ class ProjectConfig:
             constraint=data.get("constraint"),
             prefer=data.get("prefer"),
             default_gpu=data.get("default_gpu", False),
+            env=data.get("env", {}),
         )

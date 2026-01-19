@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import time
 from pathlib import Path
 
@@ -46,8 +47,8 @@ class DirectExecutor:
 
         # Build wrapper script
         builder = ScriptBuilder().shebang()
-        if ctx.gpus:
-            builder.export("CUDA_VISIBLE_DEVICES", ctx.gpus)
+        for key, value in ctx.env.items():
+            builder.export(key, value)
         if ctx.code_dir:
             builder.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
@@ -88,8 +89,8 @@ class DirectExecutor:
 
         # Build command
         env_prefix = ""
-        if ctx.gpus:
-            env_prefix += f"export CUDA_VISIBLE_DEVICES={ctx.gpus}; "
+        for key, value in ctx.env.items():
+            env_prefix += f"export {key}={shlex.quote(value)}; "
         if ctx.code_dir:
             env_prefix += f"source {ctx.code_dir}/.venv/bin/activate; "
         if ctx.run_dir:
@@ -134,8 +135,8 @@ class DirectExecutor:
         prefix = ""
         if ctx.modules:
             prefix += f"module load {' '.join(ctx.modules)} && "
-        if ctx.gpus:
-            prefix += f"export CUDA_VISIBLE_DEVICES={ctx.gpus} && "
+        for key, value in ctx.env.items():
+            prefix += f"export {key}={shlex.quote(value)} && "
         if ctx.code_dir:
             prefix += f"source {ctx.code_dir}/.venv/bin/activate && "
         if ctx.run_dir:
@@ -161,8 +162,8 @@ class DirectExecutor:
         prefix = ""
         if ctx.modules:
             prefix += f"module load {' '.join(ctx.modules)} && "
-        if ctx.gpus:
-            prefix += f"export CUDA_VISIBLE_DEVICES={ctx.gpus} && "
+        for key, value in ctx.env.items():
+            prefix += f"export {key}={shlex.quote(value)} && "
         if ctx.code_dir:
             prefix += f"source {ctx.code_dir}/.venv/bin/activate && "
         if ctx.run_dir:

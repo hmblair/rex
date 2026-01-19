@@ -118,30 +118,6 @@ def validate_cpus(cpus: int) -> None:
         raise ValueError(f"Invalid CPU count: {cpus} (must be at least 1)")
 
 
-def validate_gpus(gpus_str: str) -> None:
-    """Validate CUDA_VISIBLE_DEVICES format.
-
-    Valid formats:
-        - Single index: 0
-        - Comma-separated: 0,1,2
-        - Empty string (use all GPUs)
-
-    Raises ValueError if invalid.
-    """
-    if not gpus_str:
-        return  # Empty is valid (use all GPUs)
-
-    if not re.match(r"^\d+(,\d+)*$", gpus_str):
-        raise ValueError(
-            f"Invalid GPU indices: '{gpus_str}' (use comma-separated integers, e.g., 0,1,2)"
-        )
-
-    # Check for duplicates
-    indices = [int(x) for x in gpus_str.split(",")]
-    if len(indices) != len(set(indices)):
-        raise ValueError(f"Invalid GPU indices: '{gpus_str}' (contains duplicates)")
-
-
 def map_to_remote(local_path: Path, remote_home: str) -> str:
     """Map local path to remote path under remote $HOME.
 

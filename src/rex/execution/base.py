@@ -13,14 +13,16 @@ class ExecutionContext:
 
     target: str
     python: str = "python3"
-    gpus: str | None = None
     modules: list[str] | None = None
     code_dir: str | None = None  # From project config
     run_dir: str | None = None  # Working directory for execution
+    env: dict[str, str] | None = None  # Environment variables
 
     def __post_init__(self):
         if self.modules is None:
             self.modules = []
+        if self.env is None:
+            self.env = {}
 
 
 @dataclass

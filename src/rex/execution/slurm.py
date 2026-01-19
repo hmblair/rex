@@ -116,8 +116,8 @@ class SlurmExecutor:
         builder = ScriptBuilder().shebang(login=True)
         if ctx.modules:
             builder.module_load(ctx.modules)
-        if ctx.gpus:
-            builder.export("CUDA_VISIBLE_DEVICES", ctx.gpus)
+        for key, value in ctx.env.items():
+            builder.export(key, value)
         if ctx.code_dir:
             builder.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
@@ -182,8 +182,8 @@ class SlurmExecutor:
 
         if ctx.modules:
             builder.module_load(ctx.modules)
-        if ctx.gpus:
-            builder.export("CUDA_VISIBLE_DEVICES", ctx.gpus)
+        for key, value in ctx.env.items():
+            builder.export(key, value)
         if ctx.code_dir:
             builder.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
@@ -262,8 +262,8 @@ class SlurmExecutor:
         builder = ScriptBuilder().shebang(login=True)
         if ctx.modules:
             builder.module_load(ctx.modules)
-        if ctx.gpus:
-            builder.export("CUDA_VISIBLE_DEVICES", ctx.gpus)
+        for key, value in ctx.env.items():
+            builder.export(key, value)
         if ctx.code_dir:
             builder.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
@@ -320,8 +320,8 @@ class SlurmExecutor:
 
         if ctx.modules:
             builder.module_load(ctx.modules)
-        if ctx.gpus:
-            builder.export("CUDA_VISIBLE_DEVICES", ctx.gpus)
+        for key, value in ctx.env.items():
+            builder.export(key, value)
         if ctx.code_dir:
             builder.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
