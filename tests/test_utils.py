@@ -290,10 +290,10 @@ class TestGenerateJobName:
     """Tests for generate_job_name function."""
 
     def test_format(self):
-        """Job name has correct timestamp format."""
+        """Job name has correct timestamp format with random suffix."""
         name = generate_job_name()
-        # Format: YYYYMMDD-HHMMSS
-        assert re.match(r"^\d{8}-\d{6}$", name)
+        # Format: YYYYMMDD-HHMMSS-XXXX (4-char hex suffix for uniqueness)
+        assert re.match(r"^\d{8}-\d{6}-[0-9a-f]{4}$", name)
 
     def test_is_valid_job_name(self):
         """Generated name passes validation."""
