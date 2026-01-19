@@ -4,20 +4,21 @@ import pytest
 from pathlib import Path
 
 from rex.config.project import ProjectConfig, KNOWN_FIELDS
+from rex.exceptions import ConfigError
 
 
 class TestProjectConfigLoad:
     """Tests for ProjectConfig._load method."""
 
     def test_load_minimal_config(self, tmp_path):
-        """Loads minimal config with just host."""
+        """Loads minimal config with just name."""
         config = tmp_path / ".rex.toml"
-        config.write_text('host = "user@cluster"')
+        config.write_text('name = "my-project"')
 
         result = ProjectConfig._load(config)
 
         assert result.root == tmp_path
-        assert result.host == "user@cluster"
+        assert result.name == "my-project"
         assert result.code_dir is None
 
     def test_load_full_config(self, tmp_path):
@@ -25,7 +26,7 @@ class TestProjectConfigLoad:
         config = tmp_path / ".rex.toml"
         config.write_text(
             """
-host = "user@cluster"
+name = "flash-eq"
 code_dir = "~/project"
 run_dir = "~/runs"
 modules = ["python/3.11", "cuda/12.0"]
@@ -43,7 +44,7 @@ default_gpu = true
 
         result = ProjectConfig._load(config)
 
-        assert result.host == "user@cluster"
+        assert result.name == "flash-eq"
         assert result.code_dir == "~/project"
         assert result.run_dir == "~/runs"
         assert result.modules == ["python/3.11", "cuda/12.0"]
@@ -60,7 +61,7 @@ default_gpu = true
     def test_load_empty_modules(self, tmp_path):
         """Loads config with empty modules list."""
         config = tmp_path / ".rex.toml"
-        config.write_text('host = "user@cluster"\nmodules = []')
+        config.write_text('name = "my-project"\nmodules = []')
 
         result = ProjectConfig._load(config)
 
@@ -69,12 +70,12 @@ default_gpu = true
     def test_load_defaults(self, tmp_path):
         """Default values are set correctly."""
         config = tmp_path / ".rex.toml"
-        config.write_text('host = "user@cluster"')
+        config.write_text('name = "my-project"')
 
         result = ProjectConfig._load(config)
 
-        assert result.modules == []
-        assert result.default_gpu is False
+        assert result.modules is None
+        assert result.default_gpu is None
         assert result.cpus is None
         assert result.env == {}
 
@@ -83,7 +84,7 @@ default_gpu = true
         config = tmp_path / ".rex.toml"
         config.write_text(
             """
-host = "user@cluster"
+name = "my-project"
 
 [env]
 MY_VAR = "value"
@@ -100,7 +101,7 @@ PYTHONPATH = "/custom/path"
         config = tmp_path / ".rex.toml"
         config.write_text(
             """
-host = "user@cluster"
+name = "my-project"
 unknown_field = "value"
 another_unknown = 42
 """
@@ -112,6 +113,15 @@ another_unknown = 42
         assert "unknown fields" in captured.err
         assert "another_unknown" in captured.err or "unknown_field" in captured.err
 
+    def test_requires_name_field(self, tmp_path):
+        """Raises ConfigError if name field is missing."""
+        config = tmp_path / ".rex.toml"
+        config.write_text('code_dir = "/some/path"')
+
+        with pytest.raises(ConfigError) as exc:
+            ProjectConfig._load(config)
+        assert "name" in str(exc.value).lower()
+
 
 class TestProjectConfigFindAndLoad:
     """Tests for ProjectConfig.find_and_load method."""
@@ -119,17 +129,17 @@ class TestProjectConfigFindAndLoad:
     def test_find_in_current_dir(self, tmp_path, mocker):
         """Finds config in current directory."""
         config = tmp_path / ".rex.toml"
-        config.write_text('host = "user@cluster"')
+        config.write_text('name = "my-project"')
 
         result = ProjectConfig.find_and_load(tmp_path)
 
         assert result is not None
-        assert result.host == "user@cluster"
+        assert result.name == "my-project"
 
     def test_find_in_parent_dir(self, tmp_path):
         """Finds config in parent directory."""
         config = tmp_path / ".rex.toml"
-        config.write_text('host = "user@cluster"')
+        config.write_text('name = "my-project"')
 
         subdir = tmp_path / "src" / "module"
         subdir.mkdir(parents=True)
@@ -137,7 +147,7 @@ class TestProjectConfigFindAndLoad:
         result = ProjectConfig.find_and_load(subdir)
 
         assert result is not None
-        assert result.host == "user@cluster"
+        assert result.name == "my-project"
         assert result.root == tmp_path
 
     def test_returns_none_when_not_found(self, tmp_path):
@@ -152,7 +162,7 @@ class TestProjectConfigFindAndLoad:
     def test_uses_cwd_by_default(self, tmp_path, mocker):
         """Uses cwd when start_dir is None."""
         config = tmp_path / ".rex.toml"
-        config.write_text('host = "user@cluster"')
+        config.write_text('name = "my-project"')
 
         mocker.patch("pathlib.Path.cwd", return_value=tmp_path)
 
@@ -164,10 +174,18 @@ class TestProjectConfigFindAndLoad:
 class TestKnownFields:
     """Tests for KNOWN_FIELDS constant."""
 
-    def test_contains_essential_fields(self):
-        """KNOWN_FIELDS contains essential configuration fields."""
-        essential = {"host", "code_dir", "modules", "cpu_partition", "gpu_partition"}
-        assert essential.issubset(KNOWN_FIELDS)
+    def test_contains_name_field(self):
+        """KNOWN_FIELDS contains name field."""
+        assert "name" in KNOWN_FIELDS
+
+    def test_does_not_contain_host_field(self):
+        """KNOWN_FIELDS does not contain host field (removed)."""
+        assert "host" not in KNOWN_FIELDS
+
+    def test_contains_path_fields(self):
+        """KNOWN_FIELDS contains path configuration fields."""
+        path_fields = {"code_dir", "run_dir"}
+        assert path_fields.issubset(KNOWN_FIELDS)
 
     def test_contains_slurm_fields(self):
         """KNOWN_FIELDS contains SLURM-related fields."""

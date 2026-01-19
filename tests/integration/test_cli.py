@@ -156,7 +156,8 @@ class TestMainNoTarget:
 
     def test_no_target_shows_help(self, mocker, capsys):
         """main() shows help when no target provided."""
-        mocker.patch("rex.config.alias.load_aliases", return_value={})
+        from rex.config.global_config import GlobalConfig
+        mocker.patch.object(GlobalConfig, "load", return_value=GlobalConfig(aliases={}, hosts={}))
         mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
 
         result = main([])
@@ -180,7 +181,8 @@ class TestMainJobNameValidation:
 
     def test_invalid_job_name(self, mocker, capsys):
         """Invalid job name raises ValidationError."""
-        mocker.patch("rex.config.alias.load_aliases", return_value={})
+        from rex.config.global_config import GlobalConfig
+        mocker.patch.object(GlobalConfig, "load", return_value=GlobalConfig(aliases={}, hosts={}))
         mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
 
         result = main(["user@host", "-n", "invalid name!", "script.py"])
@@ -191,7 +193,8 @@ class TestMainJobNameValidation:
 
     def test_valid_job_name(self, mocker):
         """Valid job name is accepted."""
-        mocker.patch("rex.config.alias.load_aliases", return_value={})
+        from rex.config.global_config import GlobalConfig
+        mocker.patch.object(GlobalConfig, "load", return_value=GlobalConfig(aliases={}, hosts={}))
         mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
         mock_ssh = mocker.MagicMock()
         mocker.patch("rex.cli.SSHExecutor", return_value=mock_ssh)

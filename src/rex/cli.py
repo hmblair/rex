@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from rex import __version__
-from rex.config import ProjectConfig, expand_alias, load_aliases
+from rex.config import GlobalConfig, HostConfig, ProjectConfig
 from rex.exceptions import RexError, ValidationError, ConfigError
 from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
 from rex.output import error, setup_logging
@@ -114,6 +114,129 @@ Examples:
     return parser
 
 
+def merge_configs(
+    args: argparse.Namespace,
+    project: ProjectConfig | None,
+    host_config: HostConfig | None,
+) -> tuple[dict[str, str | None], list[str], bool, dict[str, str]]:
+    """Merge configs with priority: CLI > project > host_config > defaults.
+
+    Returns (slurm_opts, modules, use_gpu, env) where slurm_opts contains:
+        partition, gres, time, cpus, mem, constraint, prefer
+    """
+    # Get host config values or defaults
+    hc = host_config or HostConfig()
+
+    # Determine partition and use_gpu
+    use_gpu = False
+    partition = args.partition
+
+    # Get partition sources
+    proj_gpu_partition = project.gpu_partition if project else None
+    proj_cpu_partition = project.cpu_partition if project else None
+    host_gpu_partition = hc.gpu_partition
+    host_cpu_partition = hc.cpu_partition
+
+    # Resolve partition preference
+    gpu_partition = proj_gpu_partition or host_gpu_partition
+    cpu_partition = proj_cpu_partition or host_cpu_partition
+
+    # Determine default_gpu
+    default_gpu = False
+    if project is not None and project.default_gpu is not None:
+        default_gpu = project.default_gpu
+    elif hc.default_gpu:
+        default_gpu = hc.default_gpu
+
+    if not partition:
+        if args.gpu and gpu_partition:
+            partition = gpu_partition
+            use_gpu = True
+        elif args.cpu and cpu_partition:
+            partition = cpu_partition
+        elif default_gpu and gpu_partition:
+            partition = gpu_partition
+            use_gpu = True
+        else:
+            partition = cpu_partition
+
+    # Merge other SLURM options (CLI > project > host)
+    def pick(cli_val: str | int | None, proj_val: str | int | None, host_val: str | int | None) -> str | int | None:
+        if cli_val is not None:
+            return cli_val
+        if proj_val is not None:
+            return proj_val
+        return host_val
+
+    gres = pick(args.gres, project.gres if project else None, hc.gres if use_gpu else None)
+    time = pick(args.time, project.time if project else None, hc.time)
+    cpus = pick(args.cpus, project.cpus if project else None, hc.cpus)
+    mem = pick(args.mem, project.mem if project else None, hc.mem)
+    constraint = pick(args.constraint, project.constraint if project else None, hc.constraint if use_gpu else None)
+    prefer = pick(args.prefer, project.prefer if project else None, hc.prefer if use_gpu else None)
+
+    # Merge modules (CLI > project > host)
+    if args.modules:
+        modules = args.modules
+    elif project and project.modules is not None:
+        modules = project.modules
+    else:
+        modules = hc.modules
+
+    # Merge env (host < project, combined)
+    env: dict[str, str] = {}
+    env.update(hc.env)
+    if project:
+        env.update(project.env)
+
+    slurm_opts = {
+        "partition": partition,
+        "gres": gres,
+        "time": time,
+        "cpus": cpus,
+        "mem": mem,
+        "constraint": constraint,
+        "prefer": prefer,
+    }
+
+    return slurm_opts, modules, use_gpu, env
+
+
+def resolve_paths(
+    project: ProjectConfig | None,
+    host_config: HostConfig | None,
+) -> tuple[str | None, str | None]:
+    """Resolve code_dir and run_dir.
+
+    Returns (code_dir, run_dir).
+
+    If project specifies full path, use it.
+    Otherwise: {host.code_dir}/{project.name}
+    """
+    if not project:
+        return None, None
+
+    hc = host_config or HostConfig()
+
+    # Resolve code_dir
+    if project.code_dir:
+        code_dir = project.code_dir
+    elif hc.code_dir:
+        code_dir = f"{hc.code_dir}/{project.name}"
+    else:
+        code_dir = None
+
+    # Resolve run_dir
+    if project.run_dir:
+        run_dir = project.run_dir
+    elif hc.run_dir:
+        run_dir = f"{hc.run_dir}/{project.name}"
+    else:
+        run_dir = None
+
+    return code_dir, run_dir
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     try:
@@ -136,21 +259,19 @@ def _main(argv: list[str] | None = None) -> int:
         return connection_status(None)
 
     # Load configs
-    aliases = load_aliases()
+    global_config = GlobalConfig.load()
     project = ProjectConfig.find_and_load()
 
     # Resolve target
     target = args.target
-    extra_args: list[str] = []
+    alias_name: str | None = None
 
     if target:
         # Try alias expansion
-        expansion = expand_alias(target, aliases)
-        if expansion:
-            target, extra_args = expansion
-    elif project and project.host:
-        # Use project config host
-        target = project.host
+        expanded = global_config.expand_alias(target)
+        if expanded:
+            alias_name = target
+            target = expanded
 
     if not target:
         # Check if this is a command that doesn't need target
@@ -160,6 +281,9 @@ def _main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
 
+    # Get host config for the alias
+    host_config = global_config.get_host_config(alias_name) if alias_name else None
+
     # Set debug mode
     global DEBUG
     DEBUG = args.debug
@@ -168,79 +292,23 @@ def _main(argv: list[str] | None = None) -> int:
     # Create SSH executor
     ssh = SSHExecutor(target, verbose=args.debug)
 
-    # Apply project defaults (priority: CLI > project > alias)
-    if project:
-        if not args.modules and project.modules:
-            args.modules = project.modules
-        if not args.time and project.time:
-            args.time = project.time
-        if not args.cpus and project.cpus:
-            args.cpus = project.cpus
-        if not args.mem and project.mem:
-            args.mem = project.mem
-        # Note: constraint and prefer from config are applied later, filtered by use_gpu
-
-    # Apply extra args from alias as fallback (store partition separately so --gpu/--cpu can override)
-    alias_partition = None
-    for i, arg in enumerate(extra_args):
-        if arg == "-p" and i + 1 < len(extra_args):
-            args.python = args.python or extra_args[i + 1]
-        elif arg == "-s" or arg == "--slurm":
-            args.slurm = True
-        elif arg == "--partition" and i + 1 < len(extra_args):
-            alias_partition = extra_args[i + 1]
-        elif arg == "--gres" and i + 1 < len(extra_args):
-            args.gres = args.gres or extra_args[i + 1]
-        elif arg == "--time" and i + 1 < len(extra_args):
-            args.time = args.time or extra_args[i + 1]
-        elif arg == "-m" or arg == "--module":
-            if i + 1 < len(extra_args):
-                args.modules.append(extra_args[i + 1])
-
-    # Determine partition based on --gpu/--cpu flags
-    # Priority: user --partition > --gpu/--cpu > alias partition > default_gpu > cpu
-    partition = args.partition
-    use_gpu = False
-    if not partition:
-        if args.gpu and project and project.gpu_partition:
-            partition = project.gpu_partition
-            use_gpu = True
-        elif args.cpu and project and project.cpu_partition:
-            partition = project.cpu_partition
-        elif alias_partition:
-            partition = alias_partition
-            # Alias partition is CPU by default (user passes --gpu to override)
-        elif project:
-            if project.default_gpu:
-                partition = project.gpu_partition
-                use_gpu = True
-            else:
-                partition = project.cpu_partition
-
-    # Only apply GPU-related options from config if using GPU partition
-    gres = args.gres
-    if not gres and use_gpu and project and project.gres:
-        gres = project.gres
-    constraint = args.constraint
-    if not constraint and use_gpu and project and project.constraint:
-        constraint = project.constraint
-    prefer = args.prefer
-    if not prefer and use_gpu and project and project.prefer:
-        prefer = project.prefer
+    # Merge configs
+    slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+    code_dir, run_dir = resolve_paths(project, host_config)
 
     # Create executor
     executor: Executor
     if args.slurm:
-        slurm_opts = SlurmOptions(
-            partition=partition,
-            gres=gres,
-            time=args.time,
-            cpus=args.cpus,
-            mem=args.mem,
-            constraint=constraint,
-            prefer=prefer,
+        opts = SlurmOptions(
+            partition=slurm_opts["partition"],
+            gres=slurm_opts["gres"],
+            time=slurm_opts["time"],
+            cpus=slurm_opts["cpus"],
+            mem=slurm_opts["mem"],
+            constraint=slurm_opts["constraint"],
+            prefer=slurm_opts["prefer"],
         )
-        executor = SlurmExecutor(ssh, slurm_opts)
+        executor = SlurmExecutor(ssh, opts)
     else:
         executor = DirectExecutor(ssh)
 
@@ -248,10 +316,10 @@ def _main(argv: list[str] | None = None) -> int:
     ctx = ExecutionContext(
         target=target,
         python=args.python,
-        modules=args.modules,
-        code_dir=project.code_dir if project else None,
-        run_dir=project.run_dir if project else None,
-        env=project.env if project else None,
+        modules=modules,
+        code_dir=code_dir,
+        run_dir=run_dir,
+        env=env if env else None,
     )
 
     # Validate job name if provided
@@ -263,14 +331,14 @@ def _main(argv: list[str] | None = None) -> int:
 
     # Validate SLURM options
     try:
-        if args.time:
-            validate_slurm_time(args.time)
-        if args.mem:
-            validate_memory(args.mem)
-        if gres:
-            validate_gres(gres)
-        if args.cpus:
-            validate_cpus(args.cpus)
+        if slurm_opts["time"]:
+            validate_slurm_time(slurm_opts["time"])
+        if slurm_opts["mem"]:
+            validate_memory(slurm_opts["mem"])
+        if slurm_opts["gres"]:
+            validate_gres(slurm_opts["gres"])
+        if slurm_opts["cpus"]:
+            validate_cpus(slurm_opts["cpus"])
     except ValueError as e:
         raise ValidationError(str(e))
 
@@ -333,7 +401,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus
         if args.slurm:
-            return show_slurm_gpus(ssh, partition)
+            return show_slurm_gpus(ssh, slurm_opts["partition"])
         return show_gpus(ssh, target, args.json)
 
     if args.push:
@@ -356,7 +424,7 @@ def _main(argv: list[str] | None = None) -> int:
         from rex.commands.transfer import sync
         return sync(
             transfer, ssh, project, local_path,
-            code_dir=project.code_dir if project else None,
+            code_dir=code_dir,
             python=args.python,
             no_install=args.no_install,
         )

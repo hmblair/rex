@@ -11,7 +11,7 @@ from rex.output import warn
 from rex.utils import validate_slurm_time, validate_memory, validate_gres, validate_cpus
 
 KNOWN_FIELDS = {
-    "host",
+    "name",
     "code_dir",
     "run_dir",
     "modules",
@@ -33,10 +33,10 @@ class ProjectConfig:
     """Project configuration from .rex.toml."""
 
     root: Path
-    host: str | None = None
+    name: str
     code_dir: str | None = None
     run_dir: str | None = None
-    modules: list[str] = field(default_factory=list)
+    modules: list[str] | None = None
     cpu_partition: str | None = None
     gpu_partition: str | None = None
     gres: str | None = None
@@ -45,7 +45,7 @@ class ProjectConfig:
     mem: str | None = None
     constraint: str | None = None
     prefer: str | None = None
-    default_gpu: bool = False
+    default_gpu: bool | None = None
     env: dict[str, str] = field(default_factory=dict)
 
     @classmethod
@@ -77,6 +77,10 @@ class ProjectConfig:
         if unknown:
             warn(f".rex.toml: unknown fields: {', '.join(sorted(unknown))}")
 
+        # Require name field
+        if "name" not in data:
+            raise ConfigError(".rex.toml: missing required field 'name'")
+
         # Validate SLURM options
         try:
             if data.get("time"):
@@ -85,17 +89,17 @@ class ProjectConfig:
                 validate_memory(data["mem"])
             if data.get("gres"):
                 validate_gres(data["gres"])
-            if data.get("cpus"):
+            if data.get("cpus") is not None:
                 validate_cpus(data["cpus"])
         except ValueError as e:
             raise ConfigError(f".rex.toml: {e}")
 
         return cls(
             root=path.parent,
-            host=data.get("host"),
+            name=data["name"],
             code_dir=data.get("code_dir"),
             run_dir=data.get("run_dir"),
-            modules=data.get("modules", []),
+            modules=data.get("modules"),
             cpu_partition=data.get("cpu_partition"),
             gpu_partition=data.get("gpu_partition"),
             gres=data.get("gres"),
@@ -104,6 +108,6 @@ class ProjectConfig:
             mem=data.get("mem"),
             constraint=data.get("constraint"),
             prefer=data.get("prefer"),
-            default_gpu=data.get("default_gpu", False),
+            default_gpu=data.get("default_gpu"),
             env=data.get("env", {}),
         )

@@ -1,6 +1,6 @@
 """Configuration loading."""
 
-from rex.config.alias import Alias, expand_alias, load_aliases
+from rex.config.global_config import GlobalConfig, HostConfig
 from rex.config.project import ProjectConfig
 
-__all__ = ["Alias", "load_aliases", "expand_alias", "ProjectConfig"]
+__all__ = ["GlobalConfig", "HostConfig", "ProjectConfig"]
