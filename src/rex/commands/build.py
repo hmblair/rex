@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import time
 
-from rex.config.project import ProjectConfig
+from rex.config.resolved import ResolvedConfig
 from rex.exceptions import ConfigError, SlurmError
 from rex.output import info, success
 from rex.ssh.executor import SSHExecutor
@@ -13,26 +13,25 @@ from rex.ssh.executor import SSHExecutor
 
 def build(
     ssh: SSHExecutor,
-    project: ProjectConfig,
-    code_dir: str | None,
+    config: ResolvedConfig,
     wait: bool = False,
     clean: bool = False,
-    use_gpu: bool = False,
 ) -> int:
     """Create/update venv on remote.
 
     Submits build job via sbatch.
-    use_gpu: If True, use gpu_partition; otherwise use cpu_partition.
 
     Args:
-        code_dir: Resolved code_dir (from project or host config).
+        config: Resolved config with code_dir, modules, partition, etc.
 
     Raises:
         ConfigError: If code_dir is not configured.
         SlurmError: If job submission or build fails.
     """
-    if not code_dir:
+    if not config.execution.code_dir:
         raise ConfigError("code_dir not configured")
+
+    code_dir = config.execution.code_dir
 
     from rex.utils import generate_job_name
     job = f"build-{generate_job_name()}"
@@ -41,14 +40,13 @@ def build(
 
     # Build module load commands
     module_cmds = ""
-    if project.modules:
-        module_cmds = f"module load {' '.join(project.modules)}"
+    if config.execution.modules:
+        module_cmds = f"module load {' '.join(config.execution.modules)}"
 
-    # Partition option
+    # Partition option (use resolved partition from config)
     partition_opt = ""
-    partition = project.gpu_partition if use_gpu else project.cpu_partition
-    if partition:
-        partition_opt = f"--partition={partition}"
+    if config.slurm and config.slurm.partition:
+        partition_opt = f"--partition={config.slurm.partition}"
 
     # Clean command
     clean_cmd = ""

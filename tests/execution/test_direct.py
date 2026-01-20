@@ -59,7 +59,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_double_quotes(self, mock_ssh):
         """exec_foreground preserves double quotes."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, 'echo "hello world"')
 
@@ -69,7 +69,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_single_quotes(self, mock_ssh):
         """exec_foreground preserves single quotes."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "echo 'hello world'")
 
@@ -79,7 +79,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_dollar_variable(self, mock_ssh):
         """exec_foreground preserves dollar sign variables."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "echo $HOME $USER")
 
@@ -90,7 +90,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_pipe(self, mock_ssh):
         """exec_foreground preserves pipe characters."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "ls -la | grep foo")
 
@@ -100,7 +100,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_semicolon(self, mock_ssh):
         """exec_foreground preserves semicolons."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "cd /tmp; ls; pwd")
 
@@ -110,7 +110,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_ampersand(self, mock_ssh):
         """exec_foreground preserves ampersands."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "cmd1 && cmd2 || cmd3")
 
@@ -121,7 +121,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_backticks(self, mock_ssh):
         """exec_foreground preserves backticks."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "echo `date`")
 
@@ -131,7 +131,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_parentheses(self, mock_ssh):
         """exec_foreground preserves parentheses."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "(cd /tmp && ls)")
 
@@ -142,7 +142,7 @@ class TestDirectExecutorExecForeground:
     def test_exec_foreground_glob(self, mock_ssh):
         """exec_foreground preserves glob patterns."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_foreground(ctx, "ls *.py")
 
@@ -164,7 +164,7 @@ class TestDirectExecutorExecDetached:
     def test_exec_detached_double_quotes(self, mock_ssh):
         """exec_detached preserves double quotes."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_detached(ctx, 'echo "hello world"', job_name="test")
 
@@ -175,7 +175,7 @@ class TestDirectExecutorExecDetached:
     def test_exec_detached_single_quotes(self, mock_ssh):
         """exec_detached escapes single quotes properly."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_detached(ctx, "echo 'hello world'", job_name="test")
 
@@ -186,7 +186,7 @@ class TestDirectExecutorExecDetached:
     def test_exec_detached_dollar_variable(self, mock_ssh):
         """exec_detached preserves dollar sign variables."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_detached(ctx, "echo $HOME $USER", job_name="test")
 
@@ -197,7 +197,7 @@ class TestDirectExecutorExecDetached:
     def test_exec_detached_pipe(self, mock_ssh):
         """exec_detached preserves pipe characters."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_detached(ctx, "ls -la | grep foo", job_name="test")
 
@@ -207,7 +207,7 @@ class TestDirectExecutorExecDetached:
     def test_exec_detached_semicolon(self, mock_ssh):
         """exec_detached preserves semicolons."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_detached(ctx, "cd /tmp; ls; pwd", job_name="test")
 
@@ -217,7 +217,7 @@ class TestDirectExecutorExecDetached:
     def test_exec_detached_ampersand(self, mock_ssh):
         """exec_detached preserves ampersands."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         executor.exec_detached(ctx, "cmd1 && cmd2", job_name="test")
 
@@ -227,7 +227,7 @@ class TestDirectExecutorExecDetached:
     def test_exec_detached_complex_command(self, mock_ssh):
         """exec_detached handles complex real-world commands."""
         executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext(target="user@host")
+        ctx = ExecutionContext()
 
         cmd = '''for f in *.py; do echo "$f"; done'''
         executor.exec_detached(ctx, cmd, job_name="test")

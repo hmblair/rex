@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from rex import __version__
-from rex.config import GlobalConfig, HostConfig, ProjectConfig
+from rex.config import GlobalConfig, HostConfig, ProjectConfig, ResolvedConfig
 from rex.exceptions import RexError, ValidationError, ConfigError
 from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
 from rex.output import error, setup_logging
@@ -240,6 +240,44 @@ def resolve_paths(
     return code_dir, run_dir
 
 
+def resolve_config(
+    args: argparse.Namespace,
+    project: ProjectConfig | None,
+    host_config: HostConfig | None,
+) -> ResolvedConfig:
+    """Create fully resolved config from CLI args, project, and host config.
+
+    Combines merge_configs() and resolve_paths() into a single ResolvedConfig.
+    """
+    slurm_opts, modules, _, env = merge_configs(args, project, host_config)
+    code_dir, run_dir = resolve_paths(project, host_config)
+
+    execution = ExecutionContext(
+        python=args.python,
+        modules=modules,
+        code_dir=code_dir,
+        run_dir=run_dir,
+        env=env if env else None,
+    )
+
+    slurm = SlurmOptions(
+        partition=slurm_opts["partition"],
+        gres=slurm_opts["gres"],
+        time=slurm_opts["time"],
+        cpus=slurm_opts["cpus"],
+        mem=slurm_opts["mem"],
+        constraint=slurm_opts["constraint"],
+        prefer=slurm_opts["prefer"],
+    )
+
+    return ResolvedConfig(
+        name=project.name if project else None,
+        root=project.root if project else None,
+        execution=execution,
+        slurm=slurm,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     try:
@@ -299,35 +337,18 @@ def _main(argv: list[str] | None = None) -> int:
     # Create SSH executor
     ssh = SSHExecutor(target, verbose=args.debug)
 
-    # Merge configs
-    slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
-    code_dir, run_dir = resolve_paths(project, host_config)
+    # Resolve config (CLI > project > host)
+    config = resolve_config(args, project, host_config)
 
     # Create executor
     executor: Executor
     if args.slurm:
-        opts = SlurmOptions(
-            partition=slurm_opts["partition"],
-            gres=slurm_opts["gres"],
-            time=slurm_opts["time"],
-            cpus=slurm_opts["cpus"],
-            mem=slurm_opts["mem"],
-            constraint=slurm_opts["constraint"],
-            prefer=slurm_opts["prefer"],
-        )
-        executor = SlurmExecutor(ssh, opts)
+        executor = SlurmExecutor(ssh, config.slurm)
     else:
         executor = DirectExecutor(ssh)
 
-    # Create execution context
-    ctx = ExecutionContext(
-        target=target,
-        python=args.python,
-        modules=modules,
-        code_dir=code_dir,
-        run_dir=run_dir,
-        env=env if env else None,
-    )
+    # Use execution context from resolved config
+    ctx = config.execution
 
     # Validate job name if provided
     if args.name:
@@ -338,14 +359,14 @@ def _main(argv: list[str] | None = None) -> int:
 
     # Validate SLURM options
     try:
-        if slurm_opts["time"]:
-            validate_slurm_time(slurm_opts["time"])
-        if slurm_opts["mem"]:
-            validate_memory(slurm_opts["mem"])
-        if slurm_opts["gres"]:
-            validate_gres(slurm_opts["gres"])
-        if slurm_opts["cpus"]:
-            validate_cpus(slurm_opts["cpus"])
+        if config.slurm.time:
+            validate_slurm_time(config.slurm.time)
+        if config.slurm.mem:
+            validate_memory(config.slurm.mem)
+        if config.slurm.gres:
+            validate_gres(config.slurm.gres)
+        if config.slurm.cpus:
+            validate_cpus(config.slurm.cpus)
     except ValueError as e:
         raise ValidationError(str(e))
 
@@ -408,7 +429,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus
         if args.slurm:
-            return show_slurm_gpus(ssh, slurm_opts["partition"])
+            return show_slurm_gpus(ssh, config.slurm.partition)
         return show_gpus(ssh, target, args.json)
 
     if args.push:
@@ -429,18 +450,13 @@ def _main(argv: list[str] | None = None) -> int:
         transfer = FileTransfer(target, ssh)
         local_path = Path(args.sync) if args.sync != "." else None
         from rex.commands.transfer import sync
-        return sync(
-            transfer, ssh, project, local_path,
-            code_dir=code_dir,
-            python=args.python,
-            no_install=args.no_install,
-        )
+        return sync(transfer, ssh, config, local_path, no_install=args.no_install)
 
     if args.build:
         if not project:
             raise ConfigError("No .rex.toml found")
         from rex.commands.build import build
-        return build(ssh, project, code_dir, args.wait, args.clean, use_gpu=args.gpu)
+        return build(ssh, config, args.wait, args.clean)
 
     if args.exec_cmd:
         from rex.commands.exec import exec_command

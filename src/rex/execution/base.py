@@ -11,7 +11,6 @@ from typing import Protocol
 class ExecutionContext:
     """Shared context for execution."""
 
-    target: str
     python: str = "python3"
     modules: list[str] | None = None
     code_dir: str | None = None  # From project config

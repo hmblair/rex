@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rex.config.project import ProjectConfig
+from rex.config.resolved import ResolvedConfig
 from rex.exceptions import TransferError
 from rex.output import error, info, success
 from rex.ssh.executor import SSHExecutor
@@ -42,30 +42,26 @@ def pull(
 def sync(
     transfer: FileTransfer,
     ssh: SSHExecutor,
-    project: ProjectConfig | None,
+    config: ResolvedConfig,
     local_path: Path | None = None,
-    code_dir: str | None = None,
-    python: str = "python3",
     no_install: bool = False,
 ) -> int:
     """Sync project to remote.
 
-    If project config exists, uses code_dir from config.
+    Uses code_dir and root from resolved config.
     If no_install is False and pyproject.toml exists, runs pip install -e.
     """
     # Determine local path
     if local_path is None:
-        if project:
-            local_path = project.root
+        if config.root:
+            local_path = config.root
         else:
             local_path = Path.cwd()
 
     local_path = local_path.resolve()
 
-    # Determine remote path
-    remote_path = code_dir
-    if remote_path is None and project:
-        remote_path = project.code_dir
+    # Determine remote path from resolved config
+    remote_path = config.execution.code_dir
 
     # Sync
     try:
@@ -89,7 +85,7 @@ def sync(
             actual_remote = map_to_remote(local_path, remote_home)
 
             code, _, _ = ssh.exec(
-                f"cd {actual_remote} && {python} -m pip install -e . -q"
+                f"cd {actual_remote} && {config.execution.python} -m pip install -e . -q"
             )
             if code == 0:
                 success(f"Installed {local_path.name}")
