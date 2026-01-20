@@ -14,27 +14,30 @@ from rex.ssh.executor import SSHExecutor
 def build(
     ssh: SSHExecutor,
     project: ProjectConfig,
+    code_dir: str | None,
     wait: bool = False,
     clean: bool = False,
     use_gpu: bool = False,
 ) -> int:
     """Create/update venv on remote.
 
-    Requires code_dir (from project config or host config).
     Submits build job via sbatch.
     use_gpu: If True, use gpu_partition; otherwise use cpu_partition.
+
+    Args:
+        code_dir: Resolved code_dir (from project or host config).
 
     Raises:
         ConfigError: If code_dir is not configured.
         SlurmError: If job submission or build fails.
     """
-    if not project.code_dir:
+    if not code_dir:
         raise ConfigError("code_dir not configured")
 
     from rex.utils import generate_job_name
     job = f"build-{generate_job_name()}"
-    remote_log = f"{project.code_dir}/.rex-build.log"
-    remote_script = f"{project.code_dir}/.rex-build.sh"
+    remote_log = f"{code_dir}/.rex-build.log"
+    remote_script = f"{code_dir}/.rex-build.sh"
 
     # Build module load commands
     module_cmds = ""
@@ -60,7 +63,7 @@ echo "Started: $(date)"
 
 {module_cmds}
 
-cd {project.code_dir}
+cd {code_dir}
 {clean_cmd}
 
 if [[ ! -d .venv ]]; then
@@ -76,7 +79,7 @@ echo "=== Build complete ==="
 echo "Finished: $(date)"
 '''
 
-    info(f"Building in {project.code_dir}")
+    info(f"Building in {code_dir}")
 
     # Write script
     subprocess.run(

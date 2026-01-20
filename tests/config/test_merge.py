@@ -320,3 +320,32 @@ class TestResolvePaths:
 
         assert code_dir is None
         assert run_dir is None
+
+
+class TestBuildCodeDirResolution:
+    """Test that build uses resolved code_dir from host config."""
+
+    def test_build_uses_host_code_dir(self, tmp_path, mocker):
+        """Build works when code_dir comes from host config, not project."""
+        # Project has NO code_dir
+        project = make_project(tmp_path, name="my-project", code_dir=None)
+
+        # Host config HAS code_dir
+        host_config = HostConfig(code_dir="/host/base")
+
+        # Resolve paths (as CLI does)
+        code_dir, _ = resolve_paths(project, host_config)
+
+        # Mock SSH to avoid real connection
+        mock_ssh = mocker.Mock()
+        mock_ssh.exec.return_value = (0, "12345", "")
+        mock_ssh._opts = []
+        mock_ssh.target = "test-host"
+
+        mocker.patch("subprocess.run")
+
+        from rex.commands.build import build
+
+        result = build(mock_ssh, project, code_dir)
+
+        assert result == 0

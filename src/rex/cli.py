@@ -440,7 +440,7 @@ def _main(argv: list[str] | None = None) -> int:
         if not project:
             raise ConfigError("No .rex.toml found")
         from rex.commands.build import build
-        return build(ssh, project, args.wait, args.clean, use_gpu=args.gpu)
+        return build(ssh, project, code_dir, args.wait, args.clean, use_gpu=args.gpu)
 
     if args.exec_cmd:
         from rex.commands.exec import exec_command
