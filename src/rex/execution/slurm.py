@@ -351,7 +351,7 @@ REXCMD"""
     def list_jobs(self, target: str) -> list[JobStatus]:
         """List all rex SLURM jobs."""
         code, stdout, _ = self.ssh.exec(
-            "squeue -u $USER -o '%.10i %.20j %.8T %.10M' 2>/dev/null | grep rex"
+            "squeue -u $USER -o '%.10i %.30j %.8T %.10M' 2>/dev/null | grep rex"
         )
 
         jobs = []
