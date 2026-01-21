@@ -30,15 +30,41 @@ def list_jobs(executor: Executor, json_output: bool = False, since_minutes: int 
             output.append(item)
         print(json.dumps(output, indent=2))
     else:
+        if not jobs:
+            return 0
+
+        # Build row data and calculate column widths
+        rows: list[tuple[str, str, str, str, str]] = []
         for job in jobs:
-            status_str = colorize_status(job.status)
-            host = job.hostname or ""
             if job.pid:
-                print(f"{job.job_id:<20} {colorize_status('running')} (PID {job.pid})  {host}  {job.description or ''}")
+                info_str = f"PID {job.pid}"
+                status = "running"
             elif job.slurm_id:
-                print(f"{job.job_id:<20} {status_str} (SLURM {job.slurm_id})  {host}")
+                info_str = f"SLURM {job.slurm_id}"
+                status = job.status
             else:
-                print(f"{job.job_id:<20} {status_str:<20} {host}  {job.description or ''}")
+                info_str = ""
+                status = job.status
+            rows.append((job.job_id, status, info_str, job.hostname or "", job.description or ""))
+
+        # Calculate max widths
+        id_width = max(len(r[0]) for r in rows)
+        status_width = max(len(r[1]) for r in rows)
+        info_width = max(len(r[2]) for r in rows)
+        host_width = max(len(r[3]) for r in rows)
+
+        # Print with aligned columns (pad plain text, then colorize)
+        for job_id, status, info_str, host, desc in rows:
+            padded_status = status.ljust(status_width)
+            colored_status = colorize_status(padded_status)
+            parts = [job_id.ljust(id_width), colored_status]
+            if info_width > 0:
+                parts.append(info_str.ljust(info_width))
+            if host_width > 0:
+                parts.append(host.ljust(host_width))
+            if desc:
+                parts.append(desc)
+            print("  ".join(parts))
 
     return 0
 

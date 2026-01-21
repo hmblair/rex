@@ -110,7 +110,7 @@ def success(msg: str) -> None:
 
 def colorize_status(status: str) -> str:
     """Colorize job status string (for stdout)."""
-    lower = status.lower()
+    lower = status.lower().strip()
     if lower in ("running", "completed"):
         return _colorize(GREEN, status, sys.stdout)
     elif lower in ("pending", "configuring"):
