@@ -344,13 +344,16 @@ REXCMD"""
             slurm_id=slurm_id,
         )
 
-    def list_jobs(self) -> list[JobStatus]:
+    def list_jobs(self, since_minutes: int = 0) -> list[JobStatus]:
         """List all rex SLURM jobs."""
+        # Get active jobs from squeue
         code, stdout, _ = self.ssh.exec(
             "squeue -u $USER -o '%.10i %.30j %.12T %.10M' 2>/dev/null | grep rex"
         )
 
         jobs = []
+        seen_ids: set[int] = set()
+
         for line in stdout.strip().split("\n"):
             if not line or "rex" not in line:
                 continue
@@ -370,6 +373,38 @@ REXCMD"""
                     slurm_id=slurm_id,
                     hostname=self.ssh.target,
                 ))
+                seen_ids.add(slurm_id)
+
+        # Get recently finished jobs from sacct
+        if since_minutes > 0:
+            code, stdout, _ = self.ssh.exec(
+                f"sacct -u $USER --starttime=now-{since_minutes}minutes "
+                f"-o JobID,JobName,State --parsable2 2>/dev/null | grep -E '^[0-9]+\\|rex-'"
+            )
+            for line in stdout.strip().split("\n"):
+                if not line:
+                    continue
+                parts = line.split("|")
+                if len(parts) >= 3:
+                    try:
+                        slurm_id = int(parts[0])
+                    except ValueError:
+                        continue
+                    if slurm_id in seen_ids:
+                        continue  # Skip if already in squeue results
+                    name = parts[1]
+                    status = parts[2].lower()
+                    # Handle "cancelled by ..." status
+                    if status.startswith("cancelled"):
+                        status = "cancelled"
+                    job_id = name.replace("rex-", "") if name.startswith("rex-") else name
+                    jobs.append(JobStatus(
+                        job_id=job_id,
+                        status=status,
+                        slurm_id=slurm_id,
+                        hostname=self.ssh.target,
+                    ))
+
         return jobs
 
     def get_status(self, job_id: str) -> JobStatus:

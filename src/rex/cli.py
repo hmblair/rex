@@ -79,6 +79,7 @@ Examples:
 
     # Commands (nargs="?" allows --cmd --last without specifying job)
     parser.add_argument("--jobs", action="store_true", help="List jobs")
+    parser.add_argument("--since", type=int, metavar="MINS", help="Include finished jobs from last N minutes")
     parser.add_argument("--status", nargs="?", const="--last", metavar="JOB", help="Check job status")
     parser.add_argument("--log", nargs="?", const="--last", metavar="JOB", help="Show job log")
     parser.add_argument("--kill", nargs="?", const="--last", metavar="JOB", help="Kill job")
@@ -391,7 +392,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.jobs:
         from rex.commands.jobs import list_jobs
-        return list_jobs(executor, args.json)
+        return list_jobs(executor, args.json, args.since or 0)
 
     if args.status:
         from rex.commands.jobs import get_last_job, get_status

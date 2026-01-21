@@ -193,8 +193,9 @@ chmod +x {remote_cmd}"""
             self.ssh, escaped_cmd, remote_log, job_name, login_shell=True
         )
 
-    def list_jobs(self) -> list[JobStatus]:
+    def list_jobs(self, since_minutes: int = 0) -> list[JobStatus]:
         """List all rex jobs on remote."""
+        # Note: since_minutes not supported for direct execution (no job history)
         script = '''
 for log in /tmp/rex-*.log ~/.rex/rex-*.log; do
     [ -f "$log" ] || continue

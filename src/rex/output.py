@@ -110,8 +110,10 @@ def success(msg: str) -> None:
 def colorize_status(status: str) -> str:
     """Colorize job status string."""
     lower = status.lower()
-    if lower == "running":
+    if lower in ("running", "completed"):
         return _colorize(GREEN, status)
     elif lower in ("pending", "configuring"):
         return _colorize(YELLOW, status)
+    elif lower in ("failed", "cancelled", "timeout", "node_fail"):
+        return _colorize(RED, status)
     return status

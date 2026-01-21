@@ -85,8 +85,12 @@ class Executor(Protocol):
         """Execute shell command detached."""
         ...
 
-    def list_jobs(self) -> list[JobStatus]:
-        """List all rex jobs."""
+    def list_jobs(self, since_minutes: int = 0) -> list[JobStatus]:
+        """List all rex jobs.
+
+        Args:
+            since_minutes: Include finished jobs from the last N minutes (0 = active only).
+        """
         ...
 
     def get_status(self, job_id: str) -> JobStatus:

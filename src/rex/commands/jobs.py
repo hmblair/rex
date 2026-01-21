@@ -11,9 +11,9 @@ from rex.output import colorize_status, error, info, success, warn
 from rex.ssh.executor import SSHExecutor
 
 
-def list_jobs(executor: Executor, json_output: bool = False) -> int:
+def list_jobs(executor: Executor, json_output: bool = False, since_minutes: int = 0) -> int:
     """List all rex jobs on remote."""
-    jobs = executor.list_jobs()
+    jobs = executor.list_jobs(since_minutes=since_minutes)
 
     if json_output:
         output: list[dict[str, Any]] = []
