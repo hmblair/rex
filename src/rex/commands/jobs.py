@@ -7,7 +7,7 @@ import subprocess
 from typing import Any
 
 from rex.execution.base import Executor, JobResult, JobStatus
-from rex.output import error, info, success, warn
+from rex.output import colorize_status, error, info, success, warn
 from rex.ssh.executor import SSHExecutor
 
 
@@ -29,12 +29,13 @@ def list_jobs(executor: Executor, json_output: bool = False) -> int:
         print(json.dumps(output, indent=2))
     else:
         for job in jobs:
+            status_str = colorize_status(job.status)
             if job.pid:
-                print(f"{job.job_id:<20} {'running (PID ' + str(job.pid) + ')':<20} {job.description or ''}")
+                print(f"{job.job_id:<20} {colorize_status('running')} (PID {job.pid})  {job.description or ''}")
             elif job.slurm_id:
-                print(f"{job.job_id:<20} {job.status} (SLURM {job.slurm_id})")
+                print(f"{job.job_id:<20} {status_str} (SLURM {job.slurm_id})")
             else:
-                print(f"{job.job_id:<20} {job.status:<20} {job.description or ''}")
+                print(f"{job.job_id:<20} {status_str:<20} {job.description or ''}")
 
     return 0
 

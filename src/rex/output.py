@@ -105,3 +105,13 @@ def info(msg: str) -> None:
 def success(msg: str) -> None:
     """Print success message."""
     print(_colorize(GREEN, msg), file=sys.stderr)
+
+
+def colorize_status(status: str) -> str:
+    """Colorize job status string."""
+    lower = status.lower()
+    if lower == "running":
+        return _colorize(GREEN, status)
+    elif lower in ("pending", "configuring"):
+        return _colorize(YELLOW, status)
+    return status
