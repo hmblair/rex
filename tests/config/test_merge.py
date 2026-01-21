@@ -79,11 +79,11 @@ class TestMergeConfigs:
             modules=["host-module"],
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
-        assert slurm_opts["partition"] == "cli-partition"
-        assert slurm_opts["gres"] == "gpu:2"
-        assert slurm_opts["time"] == "2:00:00"
+        assert partition == "cli-partition"
+        assert gres == "gpu:2"
+        assert time == "2:00:00"
         assert modules == ["cli-module"]
 
     def test_project_overrides_host(self, tmp_path):
@@ -104,11 +104,11 @@ class TestMergeConfigs:
             modules=["host-module"],
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
-        assert slurm_opts["partition"] == "proj-gpu"
-        assert slurm_opts["gres"] == "gpu:1"
-        assert slurm_opts["time"] == "1:00:00"
+        assert partition == "proj-gpu"
+        assert gres == "gpu:1"
+        assert time == "1:00:00"
         assert modules == ["proj-module"]
         assert use_gpu is True
 
@@ -123,10 +123,10 @@ class TestMergeConfigs:
             modules=["host-module"],
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
-        assert slurm_opts["partition"] == "host-cpu"
-        assert slurm_opts["time"] == "4:00:00"
+        assert partition == "host-cpu"
+        assert time == "4:00:00"
         assert modules == ["host-module"]
         assert use_gpu is False
 
@@ -141,11 +141,11 @@ class TestMergeConfigs:
             prefer="GPU_SKU:H100",
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
-        assert slurm_opts["partition"] == "gpu"
-        assert slurm_opts["gres"] == "gpu:1"
-        assert slurm_opts["prefer"] == "GPU_SKU:H100"
+        assert partition == "gpu"
+        assert gres == "gpu:1"
+        assert prefer == "GPU_SKU:H100"
         assert use_gpu is True
 
     def test_cpu_flag_selects_cpu_partition(self, tmp_path):
@@ -157,9 +157,9 @@ class TestMergeConfigs:
             gpu_partition="gpu",
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
-        assert slurm_opts["partition"] == "cpu"
+        assert partition == "cpu"
         assert use_gpu is False
 
     def test_default_gpu_uses_gpu_partition(self, tmp_path):
@@ -173,10 +173,10 @@ class TestMergeConfigs:
             default_gpu=True,
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
-        assert slurm_opts["partition"] == "gpu"
-        assert slurm_opts["gres"] == "gpu:1"
+        assert partition == "gpu"
+        assert gres == "gpu:1"
         assert use_gpu is True
 
     def test_project_default_gpu_overrides_host(self, tmp_path):
@@ -189,9 +189,9 @@ class TestMergeConfigs:
             default_gpu=True,
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
-        assert slurm_opts["partition"] == "proj-cpu"
+        assert partition == "proj-cpu"
         assert use_gpu is False
 
     def test_gres_only_applied_when_using_gpu(self, tmp_path):
@@ -204,11 +204,11 @@ class TestMergeConfigs:
             gres="gpu:1",
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
         # Using CPU partition, so host gres should not apply
-        assert slurm_opts["partition"] == "cpu"
-        assert slurm_opts["gres"] is None
+        assert partition == "cpu"
+        assert gres is None
         assert use_gpu is False
 
     def test_env_merged(self, tmp_path):
@@ -222,7 +222,7 @@ class TestMergeConfigs:
             env={"HOST_VAR": "host", "SHARED": "from_host"},
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
 
         assert env["HOST_VAR"] == "host"
         assert env["PROJ_VAR"] == "proj"
@@ -237,10 +237,10 @@ class TestMergeConfigs:
             modules=["mod"],
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, None, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, None, host_config)
 
-        assert slurm_opts["partition"] == "cpu"
-        assert slurm_opts["time"] == "1:00:00"
+        assert partition == "cpu"
+        assert time == "1:00:00"
         assert modules == ["mod"]
 
     def test_no_host_config(self, tmp_path):
@@ -252,9 +252,9 @@ class TestMergeConfigs:
             modules=["proj-mod"],
         )
 
-        slurm_opts, modules, use_gpu, env = merge_configs(args, project, None)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, None)
 
-        assert slurm_opts["partition"] == "proj-cpu"
+        assert partition == "proj-cpu"
         assert modules == ["proj-mod"]
 
 

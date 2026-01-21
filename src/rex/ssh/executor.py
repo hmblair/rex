@@ -32,11 +32,11 @@ class SSHExecutor:
         # First check if we have a ControlMaster socket
         if socket.exists():
             # Verify the socket is still valid
-            result = subprocess.run(
+            check_result = subprocess.run(
                 ["ssh", "-O", "check", "-o", f"ControlPath={socket}", self.target],
                 capture_output=True,
             )
-            if result.returncode == 0:
+            if check_result.returncode == 0:
                 return  # Connection is good
 
             # Socket exists but is stale - remove it

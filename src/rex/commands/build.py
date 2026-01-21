@@ -28,10 +28,11 @@ def build(
         ConfigError: If code_dir is not configured.
         SlurmError: If job submission or build fails.
     """
-    if not config.execution.code_dir:
+    ctx = config.execution
+    if not ctx or not ctx.code_dir:
         raise ConfigError("code_dir not configured")
 
-    code_dir = config.execution.code_dir
+    code_dir = ctx.code_dir
 
     from rex.utils import generate_job_name
     job = f"build-{generate_job_name()}"
@@ -40,8 +41,8 @@ def build(
 
     # Build module load commands
     module_cmds = ""
-    if config.execution.modules:
-        module_cmds = f"module load {' '.join(config.execution.modules)}"
+    if ctx.modules:
+        module_cmds = f"module load {' '.join(ctx.modules)}"
 
     # Partition option (use resolved partition from config)
     partition_opt = ""

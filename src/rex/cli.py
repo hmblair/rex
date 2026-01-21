@@ -119,11 +119,10 @@ def merge_configs(
     args: argparse.Namespace,
     project: ProjectConfig | None,
     host_config: HostConfig | None,
-) -> tuple[dict[str, str | None], list[str], bool, dict[str, str]]:
+) -> tuple[str | None, str | None, str | None, int | None, str | None, str | None, str | None, list[str], bool, dict[str, str]]:
     """Merge configs with priority: CLI > project > host_config > defaults.
 
-    Returns (slurm_opts, modules, use_gpu, env) where slurm_opts contains:
-        partition, gres, time, cpus, mem, constraint, prefer
+    Returns (partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env).
     """
     # Get host config values or defaults
     hc = host_config or HostConfig()
@@ -192,17 +191,19 @@ def merge_configs(
     if project:
         env.update(project.env)
 
-    slurm_opts = {
-        "partition": partition,
-        "gres": gres,
-        "time": time,
-        "cpus": cpus,
-        "mem": mem,
-        "constraint": constraint,
-        "prefer": prefer,
-    }
-
-    return slurm_opts, modules, use_gpu, env
+    # Cast to proper types for return (pick returns str | int | None but we know the actual types)
+    return (
+        str(partition) if partition else None,
+        str(gres) if gres else None,
+        str(time) if time else None,
+        int(cpus) if cpus else None,
+        str(mem) if mem else None,
+        str(constraint) if constraint else None,
+        str(prefer) if prefer else None,
+        modules,
+        use_gpu,
+        env,
+    )
 
 
 def resolve_paths(
@@ -249,7 +250,7 @@ def resolve_config(
 
     Combines merge_configs() and resolve_paths() into a single ResolvedConfig.
     """
-    slurm_opts, modules, _, env = merge_configs(args, project, host_config)
+    partition, gres, time, cpus, mem, constraint, prefer, modules, _, env = merge_configs(args, project, host_config)
     code_dir, run_dir = resolve_paths(project, host_config)
 
     execution = ExecutionContext(
@@ -261,13 +262,13 @@ def resolve_config(
     )
 
     slurm = SlurmOptions(
-        partition=slurm_opts["partition"],
-        gres=slurm_opts["gres"],
-        time=slurm_opts["time"],
-        cpus=slurm_opts["cpus"],
-        mem=slurm_opts["mem"],
-        constraint=slurm_opts["constraint"],
-        prefer=slurm_opts["prefer"],
+        partition=partition,
+        gres=gres,
+        time=time,
+        cpus=cpus,
+        mem=mem,
+        constraint=constraint,
+        prefer=prefer,
     )
 
     return ResolvedConfig(
@@ -348,7 +349,7 @@ def _main(argv: list[str] | None = None) -> int:
         executor = DirectExecutor(ssh)
 
     # Use execution context from resolved config
-    ctx = config.execution
+    ctx = config.execution or ExecutionContext()
 
     # Validate job name if provided
     if args.name:
@@ -359,14 +360,16 @@ def _main(argv: list[str] | None = None) -> int:
 
     # Validate SLURM options
     try:
-        if config.slurm.time:
-            validate_slurm_time(config.slurm.time)
-        if config.slurm.mem:
-            validate_memory(config.slurm.mem)
-        if config.slurm.gres:
-            validate_gres(config.slurm.gres)
-        if config.slurm.cpus:
-            validate_cpus(config.slurm.cpus)
+        slurm_opts = config.slurm
+        if slurm_opts:
+            if slurm_opts.time:
+                validate_slurm_time(slurm_opts.time)
+            if slurm_opts.mem:
+                validate_memory(slurm_opts.mem)
+            if slurm_opts.gres:
+                validate_gres(slurm_opts.gres)
+            if slurm_opts.cpus:
+                validate_cpus(slurm_opts.cpus)
     except ValueError as e:
         raise ValidationError(str(e))
 
@@ -429,7 +432,8 @@ def _main(argv: list[str] | None = None) -> int:
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus
         if args.slurm:
-            return show_slurm_gpus(ssh, config.slurm.partition)
+            partition = config.slurm.partition if config.slurm else None
+            return show_slurm_gpus(ssh, partition)
         return show_gpus(ssh, target, args.json)
 
     if args.push:

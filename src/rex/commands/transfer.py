@@ -61,7 +61,8 @@ def sync(
     local_path = local_path.resolve()
 
     # Determine remote path from resolved config
-    remote_path = config.execution.code_dir
+    ctx = config.execution
+    remote_path = ctx.code_dir if ctx else None
 
     # Sync
     try:
@@ -84,8 +85,9 @@ def sync(
             from rex.utils import map_to_remote
             actual_remote = map_to_remote(local_path, remote_home)
 
+            python = ctx.python if ctx else "python3"
             code, _, _ = ssh.exec(
-                f"cd {actual_remote} && {config.execution.python} -m pip install -e . -q"
+                f"cd {actual_remote} && {python} -m pip install -e . -q"
             )
             if code == 0:
                 success(f"Installed {local_path.name}")

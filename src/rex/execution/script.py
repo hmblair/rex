@@ -60,8 +60,9 @@ def build_context_commands(
     if ctx.modules:
         commands.append(f"module load {' '.join(ctx.modules)}")
 
-    for key, value in ctx.env.items():
-        commands.append(f"export {key}={quote_with_expansion(value)}")
+    if ctx.env:
+        for key, value in ctx.env.items():
+            commands.append(f"export {key}={quote_with_expansion(value)}")
 
     if ctx.code_dir:
         commands.append(f"source {shlex.quote(ctx.code_dir + '/.venv/bin/activate')}")
@@ -139,8 +140,9 @@ class ScriptBuilder:
         """
         if ctx.modules:
             self.module_load(ctx.modules)
-        for key, value in ctx.env.items():
-            self.export(key, value)
+        if ctx.env:
+            for key, value in ctx.env.items():
+                self.export(key, value)
         if ctx.code_dir:
             self.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
