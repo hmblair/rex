@@ -64,18 +64,19 @@ def debug(msg: str) -> None:
     _logger.debug(msg)
 
 
-def _supports_color() -> bool:
-    """Check if terminal supports color."""
-    if not hasattr(sys.stderr, "isatty"):
+def _supports_color(stream: object = None) -> bool:
+    """Check if stream supports color."""
+    if stream is None:
+        stream = sys.stderr
+    isatty = getattr(stream, "isatty", None)
+    if isatty is None or not callable(isatty):
         return False
-    if not sys.stderr.isatty():
-        return False
-    return True
+    return bool(isatty())
 
 
-def _colorize(color: str, text: str) -> str:
-    """Wrap text in color codes if terminal supports it."""
-    if _supports_color():
+def _colorize(color: str, text: str, stream: object = None) -> str:
+    """Wrap text in color codes if stream supports it."""
+    if _supports_color(stream):
         return f"{color}{text}{NC}"
     return text
 
@@ -108,12 +109,12 @@ def success(msg: str) -> None:
 
 
 def colorize_status(status: str) -> str:
-    """Colorize job status string."""
+    """Colorize job status string (for stdout)."""
     lower = status.lower()
     if lower in ("running", "completed"):
-        return _colorize(GREEN, status)
+        return _colorize(GREEN, status, sys.stdout)
     elif lower in ("pending", "configuring"):
-        return _colorize(YELLOW, status)
+        return _colorize(YELLOW, status, sys.stdout)
     elif lower in ("failed", "cancelled", "timeout", "node_fail"):
-        return _colorize(RED, status)
+        return _colorize(RED, status, sys.stdout)
     return status
