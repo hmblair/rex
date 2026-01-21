@@ -131,7 +131,8 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `rex host --exec-code-dir "cmd"` | Run shell command (from code_dir) |
 | `rex host --exec-login "cmd"` | Run command on login node |
 | `rex host --read PATH` | Read file or list directory |
-| `rex host --jobs` | List all jobs |
+| `rex host --jobs` | List all jobs (color-coded status) |
+| `rex host --jobs --since 30` | Include finished jobs from last 30 mins |
 | `rex host --status JOB` | Check job status |
 | `rex host --log JOB [-f]` | Show job log (follow with -f) |
 | `rex host --kill JOB` | Kill job |
@@ -165,6 +166,7 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `--constraint NAME` | SLURM node constraint |
 | `--prefer NAME` | SLURM node preference (soft) |
 | `--last` | Use most recent job |
+| `--since MINS` | Include finished jobs from last N minutes |
 | `--json` | JSON output |
 | `-f, --follow` | Follow log output |
 | `--wait` | Wait for build to complete |
