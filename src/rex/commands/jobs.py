@@ -23,6 +23,8 @@ def list_jobs(executor: Executor, json_output: bool = False) -> int:
                 item["pid"] = job.pid
             if job.slurm_id:
                 item["slurm_id"] = job.slurm_id
+            if job.hostname:
+                item["hostname"] = job.hostname
             if job.description:
                 item["description"] = job.description
             output.append(item)
@@ -30,12 +32,13 @@ def list_jobs(executor: Executor, json_output: bool = False) -> int:
     else:
         for job in jobs:
             status_str = colorize_status(job.status)
+            host = job.hostname or ""
             if job.pid:
-                print(f"{job.job_id:<20} {colorize_status('running')} (PID {job.pid})  {job.description or ''}")
+                print(f"{job.job_id:<20} {colorize_status('running')} (PID {job.pid})  {host}  {job.description or ''}")
             elif job.slurm_id:
-                print(f"{job.job_id:<20} {status_str} (SLURM {job.slurm_id})")
+                print(f"{job.job_id:<20} {status_str} (SLURM {job.slurm_id})  {host}")
             else:
-                print(f"{job.job_id:<20} {status_str:<20} {job.description or ''}")
+                print(f"{job.job_id:<20} {status_str:<20} {host}  {job.description or ''}")
 
     return 0
 

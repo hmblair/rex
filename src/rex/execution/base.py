@@ -44,6 +44,7 @@ class JobStatus:
     pid: int | None = None
     slurm_id: int | None = None
     description: str | None = None
+    hostname: str | None = None
 
 
 @dataclass

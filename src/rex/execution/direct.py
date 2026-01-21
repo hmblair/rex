@@ -232,6 +232,7 @@ done
                     status=status,
                     pid=pid,
                     description=desc,
+                    hostname=self.ssh.target,
                 ))
         return jobs
 

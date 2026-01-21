@@ -366,8 +366,9 @@ REXCMD"""
                 job_id = name.replace("rex-", "") if name.startswith("rex-") else name
                 jobs.append(JobStatus(
                     job_id=job_id,
-                    status="running" if status in ("pending", "running") else status,
+                    status=status,
                     slurm_id=slurm_id,
+                    hostname=self.ssh.target,
                 ))
         return jobs
 
