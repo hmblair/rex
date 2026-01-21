@@ -5,27 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from rex.exceptions import TransferError
-from rex.ssh.transfer import FileTransfer, PYTHON_EXCLUDES, _shell_quote
-
-
-class TestShellQuote:
-    """Tests for _shell_quote function."""
-
-    def test_simple_string(self):
-        """Simple string gets quoted."""
-        assert _shell_quote("hello") == "'hello'"
-
-    def test_string_with_spaces(self):
-        """String with spaces gets quoted."""
-        assert _shell_quote("hello world") == "'hello world'"
-
-    def test_string_with_single_quotes(self):
-        """Single quotes are properly escaped."""
-        assert _shell_quote("it's") == "'it'\\''s'"
-
-    def test_empty_string(self):
-        """Empty string gets quoted."""
-        assert _shell_quote("") == "''"
+from rex.ssh.transfer import FileTransfer, PYTHON_EXCLUDES
 
 
 class TestFileTransferPush:

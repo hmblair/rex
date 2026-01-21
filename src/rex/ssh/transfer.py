@@ -8,7 +8,7 @@ from pathlib import Path
 from rex.exceptions import TransferError
 from rex.output import info, success
 from rex.ssh.executor import SSHExecutor
-from rex.utils import map_to_remote
+from rex.utils import map_to_remote, shell_quote
 
 # Default rsync exclusions for Python projects
 PYTHON_EXCLUDES = [
@@ -58,7 +58,7 @@ class FileTransfer:
 
         # Create remote parent directory
         remote_parent = str(Path(remote).parent)
-        code, _, _ = self.executor.exec(f"mkdir -p {_shell_quote(remote_parent)}")
+        code, _, _ = self.executor.exec(f"mkdir -p {shell_quote(remote_parent)}")
         if code != 0:
             raise TransferError("Failed to create remote directory")
 
@@ -126,7 +126,7 @@ class FileTransfer:
 
         # Create remote parent directory
         remote_parent = str(Path(remote).parent)
-        code, _, _ = self.executor.exec(f"mkdir -p {_shell_quote(remote_parent)}")
+        code, _, _ = self.executor.exec(f"mkdir -p {shell_quote(remote_parent)}")
         if code != 0:
             raise TransferError("Failed to create remote directory")
 
@@ -148,9 +148,3 @@ class FileTransfer:
             raise TransferError("Sync failed")
 
         success(f"Synced {local.name}")
-
-
-def _shell_quote(s: str) -> str:
-    """Quote string for shell."""
-    escaped = s.replace("'", "'\\''")
-    return f"'{escaped}'"

@@ -3,40 +3,8 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from rex.execution.direct import DirectExecutor, _shell_quote
+from rex.execution.direct import DirectExecutor
 from rex.execution.base import ExecutionContext
-
-
-class TestShellQuote:
-    """Tests for _shell_quote helper function."""
-
-    def test_simple_string(self):
-        """Simple strings are wrapped in single quotes."""
-        assert _shell_quote("hello") == "'hello'"
-
-    def test_string_with_spaces(self):
-        """Strings with spaces are properly quoted."""
-        assert _shell_quote("hello world") == "'hello world'"
-
-    def test_string_with_single_quote(self):
-        """Single quotes are escaped."""
-        result = _shell_quote("it's")
-        assert result == "'it'\\''s'"
-
-    def test_double_quotes_preserved(self):
-        """Double quotes are preserved."""
-        result = _shell_quote('echo "hello"')
-        assert result == '\'echo "hello"\''
-
-    def test_dollar_sign_preserved(self):
-        """Dollar signs are preserved."""
-        result = _shell_quote("echo $HOME")
-        assert result == "'echo $HOME'"
-
-    def test_pipe_preserved(self):
-        """Pipes are preserved."""
-        result = _shell_quote("ls | grep foo")
-        assert result == "'ls | grep foo'"
 
 
 class TestDirectExecutorExecForeground:

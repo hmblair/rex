@@ -388,7 +388,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.jobs:
         from rex.commands.jobs import list_jobs
-        return list_jobs(executor, target, args.json)
+        return list_jobs(executor, args.json)
 
     if args.status:
         from rex.commands.jobs import get_last_job, get_status
@@ -397,7 +397,7 @@ def _main(argv: list[str] | None = None) -> int:
             job_id = get_last_job(ssh, target)
             if not job_id:
                 raise ValidationError("No jobs found")
-        return get_status(executor, target, job_id, args.json)
+        return get_status(executor, job_id, args.json)
 
     if args.log:
         from rex.commands.jobs import get_last_job, show_log
@@ -415,7 +415,7 @@ def _main(argv: list[str] | None = None) -> int:
             job_id = get_last_job(ssh, target)
             if not job_id:
                 raise ValidationError("No jobs found")
-        return kill_job(executor, target, job_id)
+        return kill_job(executor, job_id)
 
     if args.watch:
         from rex.commands.jobs import get_last_job, watch_job
@@ -424,7 +424,7 @@ def _main(argv: list[str] | None = None) -> int:
             job_id = get_last_job(ssh, target)
             if not job_id:
                 raise ValidationError("No jobs found")
-        return watch_job(executor, target, job_id, args.json)
+        return watch_job(executor, job_id, args.json)
 
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus

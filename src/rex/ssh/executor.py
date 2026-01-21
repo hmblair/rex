@@ -9,6 +9,7 @@ from pathlib import Path
 
 from rex.exceptions import SSHError
 from rex.output import debug
+from rex.utils import shell_quote
 
 SOCKET_DIR = Path.home() / ".ssh" / "controlmasters"
 
@@ -100,7 +101,7 @@ class SSHExecutor:
         debug(f"[ssh] exec: {cmd[:100]}{'...' if len(cmd) > 100 else ''}")
 
         # Use bash --norc --noprofile to skip slow startup scripts
-        wrapped = f'bash --norc --noprofile -c {_shell_quote(cmd)}'
+        wrapped = f'bash --norc --noprofile -c {shell_quote(cmd)}'
 
         result = subprocess.run(
             ["ssh", *self._opts, self.target, wrapped],
@@ -125,7 +126,7 @@ class SSHExecutor:
         if tty is None:
             tty = sys.stdin.isatty()
 
-        wrapped = f'bash --norc --noprofile -c {_shell_quote(cmd)}'
+        wrapped = f'bash --norc --noprofile -c {shell_quote(cmd)}'
 
         ssh_args = ["ssh", *self._opts]
         if tty:
@@ -239,10 +240,3 @@ class SSHExecutor:
 
         debug(f"[ssh] exit={proc.returncode}")
         return proc.returncode
-
-
-def _shell_quote(s: str) -> str:
-    """Quote string for shell, handling single quotes."""
-    # Replace ' with '\''
-    escaped = s.replace("'", "'\\''")
-    return f"'{escaped}'"

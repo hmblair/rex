@@ -15,6 +15,7 @@ from rex.utils import (
     job_pattern,
     generate_job_name,
     generate_script_id,
+    shell_quote,
 )
 
 
@@ -317,3 +318,100 @@ class TestGenerateScriptId:
         # At minimum, format should be consistent
         assert re.match(r"^\d+-\d+$", id1)
         assert re.match(r"^\d+-\d+$", id2)
+
+
+class TestShellQuote:
+    """Tests for shell_quote function."""
+
+    def test_simple_string(self):
+        """Simple strings are wrapped in single quotes."""
+        assert shell_quote("hello") == "'hello'"
+
+    def test_string_with_spaces(self):
+        """Strings with spaces are properly quoted."""
+        assert shell_quote("hello world") == "'hello world'"
+
+    def test_string_with_single_quote(self):
+        """Single quotes are escaped."""
+        result = shell_quote("it's")
+        assert result == "'it'\\''s'"
+
+    def test_empty_string(self):
+        """Empty string returns empty quotes."""
+        assert shell_quote("") == "''"
+
+    def test_special_characters(self):
+        """Special shell characters are safely quoted."""
+        result = shell_quote("echo $HOME; rm -rf /")
+        assert result == "'echo $HOME; rm -rf /'"
+
+    def test_double_quotes(self):
+        """Double quotes are preserved inside single quotes."""
+        result = shell_quote('echo "hello world"')
+        assert result == '\'echo "hello world"\''
+
+    def test_mixed_quotes(self):
+        """Mixed single and double quotes are handled."""
+        result = shell_quote("echo \"it's working\"")
+        assert result == "'echo \"it'\\''s working\"'"
+
+    def test_dollar_sign_variable(self):
+        """Dollar signs are preserved (not expanded)."""
+        result = shell_quote("echo $HOME $USER")
+        assert result == "'echo $HOME $USER'"
+
+    def test_backticks(self):
+        """Backticks are preserved."""
+        result = shell_quote("echo `date`")
+        assert result == "'echo `date`'"
+
+    def test_pipe(self):
+        """Pipe characters are preserved."""
+        result = shell_quote("ls -la | grep foo")
+        assert result == "'ls -la | grep foo'"
+
+    def test_semicolon(self):
+        """Semicolons are preserved."""
+        result = shell_quote("cmd1; cmd2; cmd3")
+        assert result == "'cmd1; cmd2; cmd3'"
+
+    def test_ampersand(self):
+        """Ampersands are preserved."""
+        result = shell_quote("cmd1 && cmd2 || cmd3")
+        assert result == "'cmd1 && cmd2 || cmd3'"
+
+    def test_backslash(self):
+        """Backslashes are preserved."""
+        result = shell_quote("echo \\n\\t")
+        assert result == "'echo \\n\\t'"
+
+    def test_parentheses(self):
+        """Parentheses are preserved."""
+        result = shell_quote("(cd /tmp && ls)")
+        assert result == "'(cd /tmp && ls)'"
+
+    def test_brackets(self):
+        """Brackets are preserved."""
+        result = shell_quote("[[ -f /tmp/test ]] && echo yes")
+        assert result == "'[[ -f /tmp/test ]] && echo yes'"
+
+    def test_glob_characters(self):
+        """Glob characters are preserved."""
+        result = shell_quote("ls *.py **/*.txt")
+        assert result == "'ls *.py **/*.txt'"
+
+    def test_multiple_single_quotes(self):
+        """Multiple single quotes are all escaped."""
+        result = shell_quote("echo 'one' 'two' 'three'")
+        assert result == "'echo '\\''one'\\'' '\\''two'\\'' '\\''three'\\'''"
+
+    def test_newline(self):
+        """Newlines are preserved."""
+        result = shell_quote("echo first\necho second")
+        assert result == "'echo first\necho second'"
+
+    def test_complex_command(self):
+        """Complex real-world command is properly quoted."""
+        cmd = '''for f in *.py; do echo "$f"; done'''
+        result = shell_quote(cmd)
+        assert result == "'" + cmd + "'"

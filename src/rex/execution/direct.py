@@ -10,7 +10,7 @@ from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
 from rex.execution.script import ScriptBuilder, build_context_commands, get_log_path as _get_log_path
 from rex.output import success, warn
 from rex.ssh.executor import SSHExecutor
-from rex.utils import generate_job_name, generate_script_id, job_pattern
+from rex.utils import generate_script_id, job_pattern, shell_quote
 
 
 def _run_detached_nohup(
@@ -106,12 +106,9 @@ class DirectExecutor:
         ctx: ExecutionContext,
         script_path: Path,
         args: list[str],
-        job_name: str | None = None,
+        job_name: str,
     ) -> JobInfo:
         """Run Python script detached in background."""
-        if job_name is None:
-            job_name = generate_job_name()
-
         remote_script = f"/tmp/rex-{job_name}.py"
         remote_log = f"/tmp/rex-{job_name}.log"
 
@@ -178,12 +175,9 @@ chmod +x {remote_cmd}"""
         )
 
     def exec_detached(
-        self, ctx: ExecutionContext, cmd: str, job_name: str | None = None
+        self, ctx: ExecutionContext, cmd: str, job_name: str
     ) -> JobInfo:
         """Execute shell command detached."""
-        if job_name is None:
-            job_name = generate_job_name()
-
         remote_log = f"/tmp/rex-{job_name}.log"
 
         # Build prefix
@@ -199,7 +193,7 @@ chmod +x {remote_cmd}"""
             self.ssh, escaped_cmd, remote_log, job_name, login_shell=True
         )
 
-    def list_jobs(self, target: str) -> list[JobStatus]:
+    def list_jobs(self) -> list[JobStatus]:
         """List all rex jobs on remote."""
         script = '''
 for log in /tmp/rex-*.log ~/.rex/rex-*.log; do
@@ -222,7 +216,7 @@ for log in /tmp/rex-*.log ~/.rex/rex-*.log; do
     printf "%s\\t%s\\t%s\\t%s\\n" "$job" "$status" "$pid" "$desc"
 done
 '''
-        code, stdout, _ = self.ssh.exec(f"bash -c {_shell_quote(script)}")
+        code, stdout, _ = self.ssh.exec(f"bash -c {shell_quote(script)}")
 
         jobs = []
         for line in stdout.strip().split("\n"):
@@ -241,7 +235,7 @@ done
                 ))
         return jobs
 
-    def get_status(self, target: str, job_id: str) -> JobStatus:
+    def get_status(self, job_id: str) -> JobStatus:
         """Get status of specific job."""
         pattern = job_pattern(job_id)
         code, stdout, _ = self.ssh.exec(f"pgrep -f '{pattern}' | head -1")
@@ -253,11 +247,11 @@ done
         status = "running" if pid else "done"
         return JobStatus(job_id=job_id, status=status, pid=pid)
 
-    def get_log_path(self, target: str, job_id: str) -> str | None:
+    def get_log_path(self, job_id: str) -> str | None:
         """Get log file path for a job."""
         return _get_log_path(self.ssh, job_id)
 
-    def kill_job(self, target: str, job_id: str) -> bool:
+    def kill_job(self, job_id: str) -> bool:
         """Kill a running job."""
         pattern = job_pattern(job_id)
         cmd = (
@@ -278,15 +272,13 @@ done
             warn(f"Failed to kill job {job_id}")
             return False
 
-    def watch_job(
-        self, target: str, job_id: str, poll_interval: int = 5
-    ) -> JobResult:
+    def watch_job(self, job_id: str, poll_interval: int = 5) -> JobResult:
         """Wait for job to complete."""
         max_failures = 3
         failures = 0
 
         while True:
-            status = self.get_status(target, job_id)
+            status = self.get_status(job_id)
 
             if status.status == "unknown":
                 failures += 1
@@ -304,9 +296,3 @@ done
                 return JobResult(job_id=job_id, status="done", exit_code=0)
 
             time.sleep(poll_interval)
-
-
-def _shell_quote(s: str) -> str:
-    """Quote string for shell."""
-    escaped = s.replace("'", "'\\''")
-    return f"'{escaped}'"

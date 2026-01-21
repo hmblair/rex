@@ -84,24 +84,22 @@ class Executor(Protocol):
         """Execute shell command detached."""
         ...
 
-    def list_jobs(self, target: str) -> list[JobStatus]:
+    def list_jobs(self) -> list[JobStatus]:
         """List all rex jobs."""
         ...
 
-    def get_status(self, target: str, job_id: str) -> JobStatus:
+    def get_status(self, job_id: str) -> JobStatus:
         """Get status of specific job."""
         ...
 
-    def get_log_path(self, target: str, job_id: str) -> str | None:
+    def get_log_path(self, job_id: str) -> str | None:
         """Get log file path for a job."""
         ...
 
-    def kill_job(self, target: str, job_id: str) -> bool:
+    def kill_job(self, job_id: str) -> bool:
         """Kill a running job."""
         ...
 
-    def watch_job(
-        self, target: str, job_id: str, poll_interval: int = 5
-    ) -> JobResult:
+    def watch_job(self, job_id: str, poll_interval: int = 5) -> JobResult:
         """Wait for job to complete, return final status."""
         ...

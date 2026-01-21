@@ -11,11 +11,9 @@ from rex.output import error, info, success, warn
 from rex.ssh.executor import SSHExecutor
 
 
-def list_jobs(
-    executor: Executor, target: str, json_output: bool = False
-) -> int:
+def list_jobs(executor: Executor, json_output: bool = False) -> int:
     """List all rex jobs on remote."""
-    jobs = executor.list_jobs(target)
+    jobs = executor.list_jobs()
 
     if json_output:
         output: list[dict[str, Any]] = []
@@ -42,10 +40,10 @@ def list_jobs(
 
 
 def get_status(
-    executor: Executor, target: str, job_id: str, json_output: bool = False
+    executor: Executor, job_id: str, json_output: bool = False
 ) -> int:
     """Get status of specific job."""
-    status = executor.get_status(target, job_id)
+    status = executor.get_status(job_id)
 
     if json_output:
         out: dict[str, Any] = {"job": status.job_id, "status": status.status}
@@ -56,7 +54,7 @@ def get_status(
         print(json.dumps(out))
     else:
         if status.status == "unknown":
-            warn(f"Could not connect to {target}")
+            warn("Could not determine job status")
         print(status.status)
 
     return 0 if status.status == "running" else 1
@@ -81,19 +79,19 @@ def show_log(
     return ssh.exec_streaming(cmd, tty=follow)
 
 
-def kill_job(executor: Executor, target: str, job_id: str) -> int:
+def kill_job(executor: Executor, job_id: str) -> int:
     """Kill a running job."""
-    if executor.kill_job(target, job_id):
+    if executor.kill_job(job_id):
         return 0
     return 1
 
 
 def watch_job(
-    executor: Executor, target: str, job_id: str, json_output: bool = False
+    executor: Executor, job_id: str, json_output: bool = False
 ) -> int:
     """Wait for job to complete."""
     info(f"Watching job {job_id}...")
-    result = executor.watch_job(target, job_id)
+    result = executor.watch_job(job_id)
 
     if json_output:
         print(json.dumps({

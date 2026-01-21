@@ -12,7 +12,7 @@ from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
 from rex.execution.script import SbatchBuilder, ScriptBuilder, build_context_commands, get_log_path as _get_log_path
 from rex.output import debug, error, success, warn
 from rex.ssh.executor import SSHExecutor
-from rex.utils import generate_job_name, generate_script_id
+from rex.utils import generate_script_id
 
 
 def _ssh_write(ssh: SSHExecutor, content: str, remote_path: str, chmod: str | None = None) -> None:
@@ -136,11 +136,9 @@ class SlurmExecutor:
         ctx: ExecutionContext,
         script_path: Path,
         args: list[str],
-        job_name: str | None = None,
+        job_name: str,
     ) -> JobInfo:
         """Run Python script via sbatch."""
-        if job_name is None:
-            job_name = generate_job_name()
         debug(f"[slurm] run_detached: {script_path} as {job_name}")
 
         # Get remote home for absolute paths
@@ -268,11 +266,9 @@ REXCMD"""
         return exit_code
 
     def exec_detached(
-        self, ctx: ExecutionContext, cmd: str, job_name: str | None = None
+        self, ctx: ExecutionContext, cmd: str, job_name: str
     ) -> JobInfo:
         """Execute shell command via sbatch."""
-        if job_name is None:
-            job_name = generate_job_name()
         debug(f"[slurm] exec_detached: {cmd[:80]}{'...' if len(cmd) > 80 else ''} as {job_name}")
 
         # Get remote home
@@ -348,7 +344,7 @@ REXCMD"""
             slurm_id=slurm_id,
         )
 
-    def list_jobs(self, target: str) -> list[JobStatus]:
+    def list_jobs(self) -> list[JobStatus]:
         """List all rex SLURM jobs."""
         code, stdout, _ = self.ssh.exec(
             "squeue -u $USER -o '%.10i %.30j %.12T %.10M' 2>/dev/null | grep rex"
@@ -375,7 +371,7 @@ REXCMD"""
                 ))
         return jobs
 
-    def get_status(self, target: str, job_id: str) -> JobStatus:
+    def get_status(self, job_id: str) -> JobStatus:
         """Get status of specific SLURM job."""
         code, stdout, _ = self.ssh.exec(
             f"squeue -u $USER -n rex-{job_id} -h -o %T 2>/dev/null"
@@ -386,11 +382,11 @@ REXCMD"""
             return JobStatus(job_id=job_id, status=state.lower())
         return JobStatus(job_id=job_id, status="done")
 
-    def get_log_path(self, target: str, job_id: str) -> str | None:
+    def get_log_path(self, job_id: str) -> str | None:
         """Get log file path."""
         return _get_log_path(self.ssh, job_id)
 
-    def kill_job(self, target: str, job_id: str) -> bool:
+    def kill_job(self, job_id: str) -> bool:
         """Cancel SLURM job."""
         code, _, _ = self.ssh.exec(f"scancel -n rex-{job_id}")
         if code == 0:
@@ -399,9 +395,7 @@ REXCMD"""
         warn(f"Failed to cancel job {job_id}")
         return False
 
-    def watch_job(
-        self, target: str, job_id: str, poll_interval: int = 10
-    ) -> JobResult:
+    def watch_job(self, job_id: str, poll_interval: int = 10) -> JobResult:
         """Wait for SLURM job to complete."""
         max_failures = 3
         failures = 0
@@ -431,8 +425,8 @@ REXCMD"""
                 sacct_status = stdout.strip()
 
                 if sacct_status == "COMPLETED":
-                    success(f"Job {job_id} completed: success")
-                    return JobResult(job_id=job_id, status="success", exit_code=0)
+                    success(f"Job {job_id} completed")
+                    return JobResult(job_id=job_id, status="done", exit_code=0)
                 elif sacct_status in ("FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL"):
                     warn(f"Job {job_id} finished: {sacct_status.lower()}")
                     return JobResult(job_id=job_id, status="failed", exit_code=1)

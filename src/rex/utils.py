@@ -161,3 +161,9 @@ def generate_script_id() -> str:
     import time
 
     return f"{os.getpid()}-{int(time.time())}"
+
+
+def shell_quote(s: str) -> str:
+    """Quote string for shell, escaping single quotes."""
+    escaped = s.replace("'", "'\\''")
+    return f"'{escaped}'"
