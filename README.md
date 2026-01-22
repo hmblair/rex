@@ -14,7 +14,7 @@ Remote execution tool for Python and shell commands on HPC clusters.
 
 ## Installation
 
-Requires Python 3.9+.
+Requires Python 3.10+.
 
 ```bash
 pip install -e .
@@ -131,7 +131,8 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `rex host --exec-code-dir "cmd"` | Run shell command (from code_dir) |
 | `rex host --exec-login "cmd"` | Run command on login node |
 | `rex host --read PATH` | Read file or list directory |
-| `rex host --jobs` | List all jobs (color-coded status) |
+| `rex --jobs` | List jobs on all connected hosts |
+| `rex host --jobs` | List jobs on specific host |
 | `rex host --jobs --since 30` | Include finished jobs from last 30 mins |
 | `rex host --status JOB` | Check job status |
 | `rex host --log JOB [-f]` | Show job log (follow with -f) |
@@ -144,7 +145,8 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `rex host --build [--wait]` | Build remote venv |
 | `rex host --connect` | Open persistent SSH connection |
 | `rex host --disconnect` | Close persistent connection |
-| `rex host --connection` | Show connection status |
+| `rex --connection` | List all active connections |
+| `rex host --connection` | Show connection status for host |
 
 ## Options
 
