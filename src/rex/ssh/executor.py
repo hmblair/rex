@@ -14,6 +14,11 @@ from rex.utils import shell_quote
 SOCKET_DIR = Path.home() / ".ssh" / "controlmasters"
 
 
+def _ensure_socket_dir() -> None:
+    """Ensure SSH control socket directory exists."""
+    SOCKET_DIR.mkdir(parents=True, exist_ok=True)
+
+
 class SSHExecutor:
     """Execute commands on remote host via SSH."""
 
@@ -91,6 +96,7 @@ class SSHExecutor:
             "-o", "ServerAliveCountMax=3",
         ])
 
+        _ensure_socket_dir()
         socket = self._socket_path()
         opts.extend([
             "-o", f"ControlPath={socket}",
