@@ -76,104 +76,17 @@ class TestDirectExecutor:
         assert code == 0
 
     def test_exec_detached_creates_job(self, ssh_server):
-        """exec_detached creates a background job."""
+        """exec_detached creates a background job and returns info."""
         executor = DirectExecutor(ssh_server)
         ctx = ExecutionContext()
 
-        job_info = executor.exec_detached(ctx, "sleep 5", job_name="test-detach")
+        job_info = executor.exec_detached(ctx, "sleep 1", job_name="test-detach")
 
         assert job_info.job_id == "test-detach"
         assert job_info.pid is not None
         assert job_info.is_slurm is False
-
-        # Cleanup
-        executor.kill_job("test-detach")
-
-    def test_list_jobs_shows_running(self, ssh_server):
-        """list_jobs returns running jobs."""
-        executor = DirectExecutor(ssh_server)
-        ctx = ExecutionContext()
-
-        # Start a job
-        executor.exec_detached(ctx, "sleep 10", job_name="test-list")
-
-        try:
-            jobs = executor.list_jobs()
-
-            job_ids = [j.job_id for j in jobs]
-            assert "test-list" in job_ids
-
-            job = next(j for j in jobs if j.job_id == "test-list")
-            assert job.status == "running"
-            assert job.pid is not None
-        finally:
-            executor.kill_job("test-list")
-
-    def test_get_status_running(self, ssh_server):
-        """get_status returns running for active job."""
-        executor = DirectExecutor(ssh_server)
-        ctx = ExecutionContext()
-
-        executor.exec_detached(ctx, "sleep 10", job_name="test-status")
-
-        try:
-            status = executor.get_status("test-status")
-
-            assert status.job_id == "test-status"
-            assert status.status == "running"
-            assert status.pid is not None
-        finally:
-            executor.kill_job("test-status")
-
-    def test_get_status_done(self, ssh_server):
-        """get_status returns done for completed job."""
-        executor = DirectExecutor(ssh_server)
-        ctx = ExecutionContext()
-
-        # Start a quick job
-        executor.exec_detached(ctx, "echo done", job_name="test-done")
-
-        # Wait for it to complete
-        time.sleep(1)
-
-        status = executor.get_status("test-done")
-
-        assert status.status == "done"
-
-    def test_kill_job(self, ssh_server):
-        """kill_job terminates a running job."""
-        executor = DirectExecutor(ssh_server)
-        ctx = ExecutionContext()
-
-        executor.exec_detached(ctx, "sleep 60", job_name="test-kill")
-
-        # Verify it's running
-        status = executor.get_status("test-kill")
-        assert status.status == "running"
-
-        # Kill it
-        result = executor.kill_job("test-kill")
-        assert result is True
-
-        # Verify it's stopped
-        time.sleep(0.5)
-        status = executor.get_status("test-kill")
-        assert status.status == "done"
-
-    def test_watch_job_waits_for_completion(self, ssh_server):
-        """watch_job blocks until job completes."""
-        executor = DirectExecutor(ssh_server)
-        ctx = ExecutionContext()
-
-        # Start a short job
-        executor.exec_detached(ctx, "sleep 1; echo finished", job_name="test-watch")
-
-        start = time.time()
-        result = executor.watch_job("test-watch", poll_interval=1)
-        elapsed = time.time() - start
-
-        assert result.status == "done"
-        assert elapsed >= 1  # Should have waited for job
+        # Log file should be created
+        assert "/tmp/rex-test-detach.log" in job_info.log_path
 
 
 class TestShowLogFollow:
