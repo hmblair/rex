@@ -148,7 +148,7 @@ def ssh_server(docker_ssh_image, tmp_path):
         # Create SSHExecutor with custom options for test server
         ssh = SSHExecutor(
             target=f"test@127.0.0.1",
-            opts=[
+            extra_opts=[
                 "-p", str(port),
                 "-i", str(key_path),
                 "-o", "StrictHostKeyChecking=no",

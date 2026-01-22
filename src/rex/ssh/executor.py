@@ -17,9 +17,12 @@ SOCKET_DIR = Path.home() / ".ssh" / "controlmasters"
 class SSHExecutor:
     """Execute commands on remote host via SSH."""
 
-    def __init__(self, target: str, verbose: bool = False):
+    def __init__(
+        self, target: str, verbose: bool = False, extra_opts: list[str] | None = None
+    ):
         self.target = target
         self.verbose = verbose
+        self._extra_opts = extra_opts or []
         self._opts = self._build_opts()
 
     def check_connection(self) -> None:
@@ -75,6 +78,9 @@ class SSHExecutor:
     def _build_opts(self) -> list[str]:
         """Build SSH options list."""
         opts = []
+
+        # Extra opts first (e.g., -p port, -i identity)
+        opts.extend(self._extra_opts)
 
         if self.verbose:
             opts.append("-v")
