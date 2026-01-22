@@ -102,7 +102,10 @@ def show_log(
     )
 
     if follow:
-        cmd += '; tail -f "$log"'
+        # Get PID if job is running - tail --pid exits when process dies
+        # Uses [.] character class so pgrep doesn't match itself
+        cmd += f'; pid=$(pgrep -f "rex-{job_id}[.]py" 2>/dev/null | head -1)'
+        cmd += '; if [ -n "$pid" ]; then tail -f --pid=$pid "$log"; else cat "$log"; fi'
     else:
         cmd += '; cat "$log"'
 
