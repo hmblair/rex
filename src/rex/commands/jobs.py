@@ -85,7 +85,7 @@ def get_status(
     else:
         if status.status == "unknown":
             warn("Could not determine job status")
-        print(status.status)
+        print(colorize_status(status.status))
 
     return 0 if status.status == "running" else 1
 
