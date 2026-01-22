@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import subprocess
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rex.execution.base import Executor, JobResult, JobStatus
 from rex.output import colorize_status, error, info, success, warn
 from rex.ssh.executor import SSHExecutor
+
+if TYPE_CHECKING:
+    from rex.config import GlobalConfig
 
 
 def list_jobs(executor: Executor, json_output: bool = False, since_minutes: int = 0) -> int:
@@ -65,6 +68,76 @@ def list_jobs(executor: Executor, json_output: bool = False, since_minutes: int 
             if desc:
                 parts.append(desc)
             print("  ".join(parts))
+
+    return 0
+
+
+def list_all_jobs(
+    global_config: "GlobalConfig", json_output: bool = False, since_minutes: int = 0
+) -> int:
+    """List jobs across all connected hosts."""
+    from rex.execution import DirectExecutor, SlurmExecutor
+    from rex.ssh.connection import SSHConnection
+
+    active = SSHConnection.list_active()
+    if not active:
+        warn("No active connections (use --connect first)")
+        return 1
+
+    # Build reverse lookup: target -> alias
+    target_to_alias = {v: k for k, v in global_config.aliases.items()}
+
+    all_results: dict[str, list[dict[str, Any]]] = {}
+
+    for target, _socket in active:
+        alias = target_to_alias.get(target, target)
+        try:
+            ssh = SSHExecutor(target, verbose=False)
+
+            host_config = global_config.get_host_config(alias) if alias != target else None
+            if host_config and host_config.default_slurm:
+                executor: Executor = SlurmExecutor(ssh, None)
+            else:
+                executor = DirectExecutor(ssh)
+
+            jobs = executor.list_jobs(since_minutes=since_minutes)
+            if jobs:
+                all_results[alias] = []
+                for job in jobs:
+                    item: dict[str, Any] = {"job": job.job_id, "status": job.status}
+                    if job.pid:
+                        item["pid"] = job.pid
+                    if job.slurm_id:
+                        item["slurm_id"] = job.slurm_id
+                    if job.hostname:
+                        item["hostname"] = job.hostname
+                    if job.description:
+                        item["description"] = job.description
+                    all_results[alias].append(item)
+        except Exception:
+            pass
+
+    if json_output:
+        print(json.dumps(all_results, indent=2))
+    else:
+        if not all_results:
+            print("No jobs found")
+            return 0
+
+        for alias, jobs in all_results.items():
+            print(f"{alias}:")
+            for job in jobs:
+                status = job["status"]
+                parts = [f"  {job['job']}", colorize_status(status)]
+                if "slurm_id" in job:
+                    parts.append(f"SLURM {job['slurm_id']}")
+                elif "pid" in job:
+                    parts.append(f"PID {job['pid']}")
+                if "hostname" in job:
+                    parts.append(job["hostname"])
+                if "description" in job:
+                    parts.append(job["description"])
+                print("  ".join(parts))
 
     return 0
 

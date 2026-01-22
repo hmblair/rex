@@ -78,7 +78,7 @@ Examples:
     parser.add_argument("--cpu", action="store_true", help="Use CPU partition (override)")
 
     # Commands (nargs="?" allows --cmd --last without specifying job)
-    parser.add_argument("--jobs", action="store_true", help="List jobs")
+    parser.add_argument("--jobs", action="store_true", help="List jobs (connected hosts if no target)")
     parser.add_argument("--since", type=int, metavar="MINS", help="Include finished jobs from last N minutes")
     parser.add_argument("--status", nargs="?", const="--last", metavar="JOB", help="Check job status")
     parser.add_argument("--log", nargs="?", const="--last", metavar="JOB", help="Show job log")
@@ -300,6 +300,11 @@ def _main(argv: list[str] | None = None) -> int:
     if args.connection and not args.target:
         from rex.commands.connection import connection_status
         return connection_status(None)
+
+    # Special case: --jobs without target lists all
+    if args.jobs and not args.target:
+        from rex.commands.jobs import list_all_jobs
+        return list_all_jobs(GlobalConfig.load(), args.json, args.since or 0)
 
     # Load configs
     global_config = GlobalConfig.load()
