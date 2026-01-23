@@ -2,67 +2,27 @@
 
 from __future__ import annotations
 
-import subprocess
-import time
-
-from rex.config.resolved import ResolvedConfig
-from rex.exceptions import ConfigError, SlurmError
-from rex.output import info, success
-from rex.ssh.executor import SSHExecutor
+from rex.exceptions import ConfigError
+from rex.execution.base import ExecutionContext, Executor, JobInfo
+from rex.output import info
+from rex.utils import generate_job_name
 
 
-def build(
-    ssh: SSHExecutor,
-    config: ResolvedConfig,
-    wait: bool = False,
-    clean: bool = False,
-) -> int:
-    """Create/update venv on remote.
-
-    Submits build job via sbatch.
-
-    Args:
-        config: Resolved config with code_dir, modules, partition, etc.
-
-    Raises:
-        ConfigError: If code_dir is not configured.
-        SlurmError: If job submission or build fails.
-    """
-    ctx = config.execution
-    if not ctx or not ctx.code_dir:
-        raise ConfigError("code_dir not configured")
-
-    code_dir = ctx.code_dir
-
-    from rex.utils import generate_job_name
-    job = f"build-{generate_job_name()}"
-    remote_log = f"{code_dir}/.rex-build.log"
-    remote_script = f"{code_dir}/.rex-build.sh"
-
-    # Build module load commands
+def _build_script(ctx: ExecutionContext, clean: bool = False) -> str:
+    """Generate the build script content."""
     module_cmds = ""
     if ctx.modules:
         module_cmds = f"module load {' '.join(ctx.modules)}"
 
-    # Partition option (use resolved partition from config)
-    partition_opt = ""
-    if config.slurm and config.slurm.partition:
-        partition_opt = f"--partition={config.slurm.partition}"
+    clean_cmd = "rm -rf .venv" if clean else ""
 
-    # Clean command
-    clean_cmd = ""
-    if clean:
-        clean_cmd = "rm -rf .venv"
-
-    # Build script
-    script_content = f'''#!/bin/bash -l
-set -e
+    return f"""set -e
 echo "=== Rex Build ==="
 echo "Started: $(date)"
 
 {module_cmds}
 
-cd {code_dir}
+cd {ctx.code_dir}
 {clean_cmd}
 
 if [[ ! -d .venv ]]; then
@@ -76,52 +36,24 @@ echo "=== Installing package ==="
 
 echo "=== Build complete ==="
 echo "Finished: $(date)"
-'''
+"""
 
-    info(f"Building in {code_dir}")
 
-    # Write script
-    subprocess.run(
-        ["ssh", *ssh._opts, ssh.target, f"cat > {remote_script} && chmod +x {remote_script}"],
-        input=script_content.encode(),
-        check=True,
-    )
+def build(
+    executor: Executor,
+    ctx: ExecutionContext,
+    clean: bool = False,
+) -> int | JobInfo:
+    """Create/update venv on remote via exec_detached.
 
-    # Submit job
-    code, stdout, _ = ssh.exec(
-        f"sbatch --parsable {partition_opt} --time=00:30:00 "
-        f"--job-name=rex-{job} --output={remote_log} {remote_script}"
-    )
+    Returns JobInfo so users can track with --log, --watch, --status, --kill.
+    """
+    if not ctx or not ctx.code_dir:
+        raise ConfigError("code_dir not configured")
 
-    if not stdout.strip():
-        raise SlurmError("Failed to submit build job")
+    info(f"Building in {ctx.code_dir}")
 
-    slurm_id = stdout.strip()
-    success(f"Submitted: {job} (SLURM {slurm_id})")
-    print(f"Log: rex {ssh.target} --exec 'cat {remote_log}'")
+    job_name = f"build-{generate_job_name()}"
+    script = _build_script(ctx, clean)
 
-    # Wait if requested
-    if wait:
-        info("Waiting for build to complete...")
-        poll_interval = 5
-
-        while True:
-            code, stdout, _ = ssh.exec(f"squeue -j {slurm_id} -h -o %T 2>/dev/null")
-            state = stdout.strip()
-
-            if not state:
-                # Job done - check result
-                code, stdout, _ = ssh.exec(f"tail -1 {remote_log} 2>/dev/null")
-                last_line = stdout.strip()
-
-                if "Build complete" in last_line:
-                    success("Build complete")
-                    return 0
-                else:
-                    raise SlurmError(
-                        f"Build failed - check log: rex {ssh.target} --exec 'cat {remote_log}'"
-                    )
-
-            time.sleep(poll_interval)
-
-    return 0
+    return executor.exec_detached(ctx, script, job_name)

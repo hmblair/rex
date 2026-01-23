@@ -142,7 +142,7 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `rex host --push local [remote]` | Upload files |
 | `rex host --pull remote [local]` | Download files |
 | `rex host --sync [path]` | Rsync project |
-| `rex host --build [--wait]` | Build remote venv |
+| `rex host --build` | Build remote venv (trackable job) |
 | `rex host --connect` | Open persistent SSH connection |
 | `rex host --disconnect` | Close persistent connection |
 | `rex --connection` | List all active connections |
@@ -171,7 +171,6 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `--since MINS` | Include finished jobs from last N minutes |
 | `--json` | JSON output |
 | `-f, --follow` | Follow log output |
-| `--wait` | Wait for build to complete |
 | `--clean` | Clean venv before build |
 | `--debug` | Enable verbose SSH output |
 

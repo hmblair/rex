@@ -9,7 +9,13 @@ from pathlib import Path
 from rex import __version__
 from rex.config import GlobalConfig, HostConfig, ProjectConfig, ResolvedConfig
 from rex.exceptions import RexError, ValidationError, ConfigError
-from rex.execution import DirectExecutor, ExecutionContext, Executor, SlurmExecutor, SlurmOptions
+from rex.execution import (
+    DirectExecutor,
+    ExecutionContext,
+    Executor,
+    SlurmExecutor,
+    SlurmOptions,
+)
 from rex.output import error, setup_logging
 from rex.ssh import SSHExecutor, FileTransfer
 from rex.utils import (
@@ -52,7 +58,9 @@ Examples:
     )
 
     # Version
-    parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "-V", "--version", action="version", version=f"%(prog)s {__version__}"
+    )
 
     # Target
     parser.add_argument("target", nargs="?", help="alias or user@host")
@@ -63,7 +71,12 @@ Examples:
     parser.add_argument("-n", "--name", help="Job name for detached jobs")
     parser.add_argument("-p", "--python", default="python3", help="Python interpreter")
     parser.add_argument(
-        "-m", "--module", action="append", dest="modules", default=[], help="Module to load"
+        "-m",
+        "--module",
+        action="append",
+        dest="modules",
+        default=[],
+        help="Module to load",
     )
 
     # SLURM options
@@ -75,37 +88,74 @@ Examples:
     parser.add_argument("--constraint", help="SLURM node constraint")
     parser.add_argument("--prefer", help="SLURM node preference (soft constraint)")
     parser.add_argument("--gpu", action="store_true", help="Use GPU partition")
-    parser.add_argument("--cpu", action="store_true", help="Use CPU partition (override)")
+    parser.add_argument(
+        "--cpu", action="store_true", help="Use CPU partition (override)"
+    )
 
     # Commands (nargs="?" allows --cmd --last without specifying job)
-    parser.add_argument("--jobs", action="store_true", help="List jobs (connected hosts if no target)")
-    parser.add_argument("--since", type=int, metavar="MINS", help="Include finished jobs from last N minutes")
-    parser.add_argument("--status", nargs="?", const="--last", metavar="JOB", help="Check job status")
-    parser.add_argument("--log", nargs="?", const="--last", metavar="JOB", help="Show job log")
-    parser.add_argument("--kill", nargs="?", const="--last", metavar="JOB", help="Kill job")
-    parser.add_argument("--watch", nargs="*", metavar="JOB", help="Wait for job(s) to complete")
-    parser.add_argument("--gpu-info", action="store_true", dest="gpu_info", help="Show GPU info")
+    parser.add_argument(
+        "--jobs", action="store_true", help="List jobs (connected hosts if no target)"
+    )
+    parser.add_argument(
+        "--since",
+        type=int,
+        metavar="MINS",
+        help="Include finished jobs from last N minutes",
+    )
+    parser.add_argument(
+        "--status", nargs="?", const="--last", metavar="JOB", help="Check job status"
+    )
+    parser.add_argument(
+        "--log", nargs="?", const="--last", metavar="JOB", help="Show job log"
+    )
+    parser.add_argument(
+        "--kill", nargs="?", const="--last", metavar="JOB", help="Kill job"
+    )
+    parser.add_argument(
+        "--watch", nargs="*", metavar="JOB", help="Wait for job(s) to complete"
+    )
+    parser.add_argument(
+        "--gpu-info", action="store_true", dest="gpu_info", help="Show GPU info"
+    )
 
     parser.add_argument("--push", nargs="+", metavar="PATH", help="Push files")
     parser.add_argument("--pull", nargs="+", metavar="PATH", help="Pull files")
-    parser.add_argument("--sync", nargs="?", const=".", metavar="PATH", help="Sync project")
+    parser.add_argument(
+        "--sync", nargs="?", const=".", metavar="PATH", help="Sync project"
+    )
 
     parser.add_argument("--build", action="store_true", help="Build venv on remote")
-    parser.add_argument("--exec", dest="exec_cmd", metavar="CMD", help="Execute shell command")
-    parser.add_argument("--exec-code-dir", dest="exec_code_dir", metavar="CMD", help="Execute in code_dir")
-    parser.add_argument("--exec-login", dest="exec_login", metavar="CMD", help="Execute on login node")
-    parser.add_argument("--read", dest="read_path", metavar="PATH", help="Read file or list directory")
+    parser.add_argument(
+        "--exec", dest="exec_cmd", metavar="CMD", help="Execute shell command"
+    )
+    parser.add_argument(
+        "--exec-code-dir",
+        dest="exec_code_dir",
+        metavar="CMD",
+        help="Execute in code_dir",
+    )
+    parser.add_argument(
+        "--exec-login", dest="exec_login", metavar="CMD", help="Execute on login node"
+    )
+    parser.add_argument(
+        "--read", dest="read_path", metavar="PATH", help="Read file or list directory"
+    )
 
-    parser.add_argument("--connect", action="store_true", help="Open persistent connection")
-    parser.add_argument("--disconnect", action="store_true", help="Close persistent connection")
-    parser.add_argument("--connection", action="store_true", help="Show connection status")
+    parser.add_argument(
+        "--connect", action="store_true", help="Open persistent connection"
+    )
+    parser.add_argument(
+        "--disconnect", action="store_true", help="Close persistent connection"
+    )
+    parser.add_argument(
+        "--connection", action="store_true", help="Show connection status"
+    )
 
     # Modifiers
     parser.add_argument("--last", action="store_true", help="Use most recent job")
     parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument("-f", "--follow", action="store_true", help="Follow log")
     parser.add_argument("--no-install", action="store_true", help="Skip pip install")
-    parser.add_argument("--wait", action="store_true", help="Wait for build")
     parser.add_argument("--clean", action="store_true", help="Clean build")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
 
@@ -120,7 +170,18 @@ def merge_configs(
     args: argparse.Namespace,
     project: ProjectConfig | None,
     host_config: HostConfig | None,
-) -> tuple[str | None, str | None, str | None, int | None, str | None, str | None, str | None, list[str], bool, dict[str, str]]:
+) -> tuple[
+    str | None,
+    str | None,
+    str | None,
+    int | None,
+    str | None,
+    str | None,
+    str | None,
+    list[str],
+    bool,
+    dict[str, str],
+]:
     """Merge configs with priority: CLI > project > host_config > defaults.
 
     Returns (partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env).
@@ -162,21 +223,33 @@ def merge_configs(
             partition = cpu_partition
 
     # Merge other SLURM options (CLI > project > host)
-    def pick(cli_val: str | int | None, proj_val: str | int | None, host_val: str | int | None) -> str | int | None:
+    def pick(
+        cli_val: str | int | None,
+        proj_val: str | int | None,
+        host_val: str | int | None,
+    ) -> str | int | None:
         if cli_val is not None:
             return cli_val
         if proj_val is not None:
             return proj_val
         return host_val
 
-    gres = pick(args.gres, project.gres if project else None, hc.gres if use_gpu else None)
+    gres = pick(
+        args.gres, project.gres if project else None, hc.gres if use_gpu else None
+    )
     time = pick(args.time, project.time if project else None, hc.time)
     cpus = pick(args.cpus, project.cpus if project else None, hc.cpus)
     mem = pick(args.mem, project.mem if project else None, hc.mem)
     # Host-level constraint/prefer are typically GPU-specific (e.g., GPU_SKU:H100),
     # so only apply them on GPU jobs. CLI and project-level values always apply.
-    constraint = pick(args.constraint, project.constraint if project else None, hc.constraint if use_gpu else None)
-    prefer = pick(args.prefer, project.prefer if project else None, hc.prefer if use_gpu else None)
+    constraint = pick(
+        args.constraint,
+        project.constraint if project else None,
+        hc.constraint if use_gpu else None,
+    )
+    prefer = pick(
+        args.prefer, project.prefer if project else None, hc.prefer if use_gpu else None
+    )
 
     # Merge modules (CLI > project > host)
     if args.modules:
@@ -251,7 +324,9 @@ def resolve_config(
 
     Combines merge_configs() and resolve_paths() into a single ResolvedConfig.
     """
-    partition, gres, time, cpus, mem, constraint, prefer, modules, _, env = merge_configs(args, project, host_config)
+    partition, gres, time, cpus, mem, constraint, prefer, modules, _, env = (
+        merge_configs(args, project, host_config)
+    )
     code_dir, run_dir = resolve_paths(project, host_config)
 
     execution = ExecutionContext(
@@ -299,11 +374,13 @@ def _main(argv: list[str] | None = None) -> int:
     # Special case: --connection without target lists all
     if args.connection and not args.target:
         from rex.commands.connection import connection_status
+
         return connection_status(None)
 
     # Special case: --jobs without target lists all
     if args.jobs and not args.target:
         from rex.commands.jobs import list_all_jobs
+
         return list_all_jobs(GlobalConfig.load(), args.json, args.since or 0)
 
     # Load configs
@@ -325,6 +402,7 @@ def _main(argv: list[str] | None = None) -> int:
         # Check if this is a command that doesn't need target
         if args.connection:
             from rex.commands.connection import connection_status
+
             return connection_status(None)
         parser.print_help()
         return 1
@@ -382,14 +460,17 @@ def _main(argv: list[str] | None = None) -> int:
     # Dispatch commands
     if args.connect:
         from rex.commands.connection import connect
+
         return connect(target)
 
     if args.disconnect:
         from rex.commands.connection import disconnect
+
         return disconnect(target)
 
     if args.connection:
         from rex.commands.connection import connection_status
+
         return connection_status(target)
 
     # Verify SSH connection works before running any commands
@@ -397,10 +478,12 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.jobs:
         from rex.commands.jobs import list_jobs
+
         return list_jobs(executor, args.json, args.since or 0)
 
     if args.status:
         from rex.commands.jobs import get_last_job, get_status
+
         job_id = args.status
         if args.last or job_id == "--last":
             job_id = get_last_job(ssh, target)
@@ -410,6 +493,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.log:
         from rex.commands.jobs import get_last_job, show_log
+
         job_id = args.log
         if args.last or job_id == "--last":
             job_id = get_last_job(ssh, target)
@@ -419,6 +503,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.kill:
         from rex.commands.jobs import get_last_job, kill_job
+
         job_id = args.kill
         if args.last or job_id == "--last":
             job_id = get_last_job(ssh, target)
@@ -428,6 +513,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.watch is not None:
         from rex.commands.jobs import get_last_job, watch_jobs
+
         job_ids = args.watch
         if not job_ids or args.last:
             job_id = get_last_job(ssh, target)
@@ -438,6 +524,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus
+
         if args.slurm:
             partition = config.slurm.partition if config.slurm else None
             return show_slurm_gpus(ssh, partition)
@@ -448,6 +535,7 @@ def _main(argv: list[str] | None = None) -> int:
         push_local = Path(args.push[0])
         push_remote = args.push[1] if len(args.push) > 1 else None
         from rex.commands.transfer import push
+
         return push(transfer, push_local, push_remote)
 
     if args.pull:
@@ -455,22 +543,29 @@ def _main(argv: list[str] | None = None) -> int:
         pull_remote = args.pull[0]
         pull_local = Path(args.pull[1]) if len(args.pull) > 1 else None
         from rex.commands.transfer import pull
+
         return pull(transfer, pull_remote, pull_local)
 
     if args.sync is not None:
         transfer = FileTransfer(target, ssh)
         local_path = Path(args.sync) if args.sync != "." else None
         from rex.commands.transfer import sync
+
         return sync(transfer, ssh, config, local_path, no_install=args.no_install)
 
     if args.build:
         if not project:
             raise ConfigError("No .rex.toml found")
         from rex.commands.build import build
-        return build(ssh, config, args.wait, args.clean)
+
+        result = build(executor, ctx, args.clean)
+        if isinstance(result, int):
+            return result
+        return 0
 
     if args.exec_cmd:
         from rex.commands.exec import exec_command
+
         result = exec_command(executor, ctx, args.exec_cmd, args.detach, args.name)
         if isinstance(result, int):
             return result
@@ -479,9 +574,12 @@ def _main(argv: list[str] | None = None) -> int:
     if args.exec_code_dir:
         from dataclasses import replace
         from rex.commands.exec import exec_command
+
         # Use code_dir as working directory instead of run_dir
         code_ctx = replace(ctx, run_dir=ctx.code_dir)
-        result = exec_command(executor, code_ctx, args.exec_code_dir, args.detach, args.name)
+        result = exec_command(
+            executor, code_ctx, args.exec_code_dir, args.detach, args.name
+        )
         if isinstance(result, int):
             return result
         return 0
@@ -490,6 +588,7 @@ def _main(argv: list[str] | None = None) -> int:
         # Always use direct executor for login node
         direct = DirectExecutor(ssh)
         from rex.commands.exec import exec_command
+
         result = exec_command(direct, ctx, args.exec_login, args.detach, args.name)
         if isinstance(result, int):
             return result
@@ -498,6 +597,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.read_path:
         # Always run on login node
         from rex.commands.read import read_remote
+
         return read_remote(ssh, args.read_path)
 
     # Default: run Python script
@@ -505,6 +605,7 @@ def _main(argv: list[str] | None = None) -> int:
     script_args = args.script_args or []
 
     from rex.commands.run import run_python
+
     result = run_python(executor, ctx, script, script_args, args.detach, args.name)
     if isinstance(result, int):
         return result

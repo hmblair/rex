@@ -79,7 +79,9 @@ class TestMergeConfigs:
             modules=["host-module"],
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert partition == "cli-partition"
         assert gres == "gpu:2"
@@ -104,7 +106,9 @@ class TestMergeConfigs:
             modules=["host-module"],
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert partition == "proj-gpu"
         assert gres == "gpu:1"
@@ -123,7 +127,9 @@ class TestMergeConfigs:
             modules=["host-module"],
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert partition == "host-cpu"
         assert time == "4:00:00"
@@ -141,7 +147,9 @@ class TestMergeConfigs:
             prefer="GPU_SKU:H100",
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert partition == "gpu"
         assert gres == "gpu:1"
@@ -157,7 +165,9 @@ class TestMergeConfigs:
             gpu_partition="gpu",
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert partition == "cpu"
         assert use_gpu is False
@@ -173,7 +183,9 @@ class TestMergeConfigs:
             default_gpu=True,
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert partition == "gpu"
         assert gres == "gpu:1"
@@ -189,7 +201,9 @@ class TestMergeConfigs:
             default_gpu=True,
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert partition == "proj-cpu"
         assert use_gpu is False
@@ -204,7 +218,9 @@ class TestMergeConfigs:
             gres="gpu:1",
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         # Using CPU partition, so host gres should not apply
         assert partition == "cpu"
@@ -222,7 +238,9 @@ class TestMergeConfigs:
             env={"HOST_VAR": "host", "SHARED": "from_host"},
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, host_config)
+        )
 
         assert env["HOST_VAR"] == "host"
         assert env["PROJ_VAR"] == "proj"
@@ -237,7 +255,9 @@ class TestMergeConfigs:
             modules=["mod"],
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, None, host_config)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, None, host_config)
+        )
 
         assert partition == "cpu"
         assert time == "1:00:00"
@@ -252,7 +272,9 @@ class TestMergeConfigs:
             modules=["proj-mod"],
         )
 
-        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = merge_configs(args, project, None)
+        partition, gres, time, cpus, mem, constraint, prefer, modules, use_gpu, env = (
+            merge_configs(args, project, None)
+        )
 
         assert partition == "proj-cpu"
         assert modules == ["proj-mod"]
@@ -331,6 +353,8 @@ class TestBuildCodeDirResolution:
 
     def test_build_uses_host_code_dir(self, tmp_path, mocker):
         """Build works when code_dir comes from host config, not project."""
+        from rex.execution.base import JobInfo
+
         # Project has NO code_dir
         project = make_project(tmp_path, name="my-project", code_dir=None)
 
@@ -341,23 +365,25 @@ class TestBuildCodeDirResolution:
         args = make_args()
         config = resolve_config(args, project, host_config)
 
-        # Mock SSH to avoid real connection
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "test-host"
-
-        mocker.patch("subprocess.run")
+        # Mock executor
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc", log_path="", is_slurm=True, slurm_id=12345
+        )
 
         from rex.commands.build import build
 
-        result = build(mock_ssh, config)
+        result = build(mock_executor, config.execution)
 
-        assert result == 0
         assert config.execution.code_dir == "/host/base/my-project"
+        # Verify exec_detached was called with the right context
+        call_args = mock_executor.exec_detached.call_args
+        assert call_args[0][0].code_dir == "/host/base/my-project"
 
     def test_build_uses_resolved_modules(self, tmp_path, mocker):
         """Build uses modules from resolved config, not raw project."""
+        from rex.execution.base import JobInfo
+
         # Project has NO modules
         project = make_project(tmp_path, name="my-project", modules=None)
 
@@ -374,24 +400,19 @@ class TestBuildCodeDirResolution:
         # Verify modules are resolved from host config
         assert config.execution.modules == ["cuda/12.0", "python/3.11"]
 
-        # Mock SSH
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "test-host"
-
-        mock_run = mocker.patch("subprocess.run")
+        # Mock executor
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc", log_path="", is_slurm=True, slurm_id=12345
+        )
 
         from rex.commands.build import build
 
-        result = build(mock_ssh, config)
-
-        assert result == 0
+        build(mock_executor, config.execution)
 
         # Verify the script content includes module load
-        call_args = mock_run.call_args
-        script_content = call_args.kwargs["input"].decode()
-        assert "module load cuda/12.0 python/3.11" in script_content
+        script = mock_executor.exec_detached.call_args[0][1]
+        assert "module load cuda/12.0 python/3.11" in script
 
 
 class TestResolveConfig:

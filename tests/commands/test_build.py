@@ -1,194 +1,150 @@
-"""Tests for build command with ResolvedConfig."""
+"""Tests for build command."""
 
 import pytest
 
-from rex.cli import resolve_config
-from rex.config.global_config import HostConfig
-from rex.config.resolved import ResolvedConfig
-from rex.execution.base import ExecutionContext
-from rex.execution.slurm import SlurmOptions
+from rex.execution.base import ExecutionContext, JobInfo
 from rex.exceptions import ConfigError
 
 
-def make_config(
+def make_ctx(
     code_dir: str | None = None,
     modules: list[str] | None = None,
-    partition: str | None = None,
-) -> ResolvedConfig:
-    """Create a ResolvedConfig for testing."""
-    return ResolvedConfig(
-        name="test-project",
-        root=None,
-        execution=ExecutionContext(
-            python="python3",
-            modules=modules or [],
-            code_dir=code_dir,
-            run_dir=None,
-            env={},
-        ),
-        slurm=SlurmOptions(partition=partition),
+) -> ExecutionContext:
+    """Create an ExecutionContext for testing."""
+    return ExecutionContext(
+        python="python3",
+        modules=modules or [],
+        code_dir=code_dir,
+        run_dir=None,
+        env={},
     )
 
 
-class TestBuildWithResolvedConfig:
-    """Tests for build command using ResolvedConfig."""
+class TestBuild:
+    """Tests for build command."""
 
     def test_build_requires_code_dir(self, mocker):
         """Build raises ConfigError when code_dir is None."""
-        config = make_config(code_dir=None)
-        mock_ssh = mocker.Mock()
+        ctx = make_ctx(code_dir=None)
+        mock_executor = mocker.Mock()
 
         from rex.commands.build import build
 
         with pytest.raises(ConfigError, match="code_dir not configured"):
-            build(mock_ssh, config)
+            build(mock_executor, ctx)
 
-    def test_build_uses_execution_code_dir(self, mocker):
-        """Build uses code_dir from config.execution."""
-        config = make_config(code_dir="/remote/project")
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mock_run = mocker.patch("subprocess.run")
+    def test_build_calls_exec_detached(self, mocker):
+        """Build calls executor.exec_detached with script."""
+        ctx = make_ctx(code_dir="/remote/project")
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc123",
+            log_path="/home/user/.rex/rex-build-abc123.log",
+            is_slurm=True,
+            slurm_id=12345,
+        )
 
         from rex.commands.build import build
 
-        build(mock_ssh, config)
+        result = build(mock_executor, ctx)
 
-        # Verify script is written to code_dir
-        call_args = mock_run.call_args
-        ssh_cmd = call_args[0][0]
-        assert "/remote/project/.rex-build.sh" in ssh_cmd[-1]
+        mock_executor.exec_detached.assert_called_once()
+        call_args = mock_executor.exec_detached.call_args
+        assert call_args[0][0] == ctx
+        assert "build-" in call_args[0][2]  # job_name
 
-    def test_build_uses_execution_modules(self, mocker):
-        """Build includes module load from config.execution.modules."""
-        config = make_config(
+    def test_build_returns_job_info(self, mocker):
+        """Build returns JobInfo from exec_detached."""
+        ctx = make_ctx(code_dir="/remote/project")
+        mock_executor = mocker.Mock()
+        expected = JobInfo(
+            job_id="build-abc123",
+            log_path="/home/user/.rex/rex-build-abc123.log",
+            is_slurm=True,
+            slurm_id=12345,
+        )
+        mock_executor.exec_detached.return_value = expected
+
+        from rex.commands.build import build
+
+        result = build(mock_executor, ctx)
+
+        assert result == expected
+
+    def test_build_script_includes_modules(self, mocker):
+        """Build script includes module load commands."""
+        ctx = make_ctx(
             code_dir="/remote/project",
             modules=["cuda/12.0", "python/3.11"],
         )
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mock_run = mocker.patch("subprocess.run")
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc123", log_path="", is_slurm=True, slurm_id=12345
+        )
 
         from rex.commands.build import build
 
-        build(mock_ssh, config)
+        build(mock_executor, ctx)
 
-        # Verify script content includes module load
-        script_content = mock_run.call_args.kwargs["input"].decode()
-        assert "module load cuda/12.0 python/3.11" in script_content
+        script = mock_executor.exec_detached.call_args[0][1]
+        assert "module load cuda/12.0 python/3.11" in script
 
-    def test_build_no_modules_when_empty(self, mocker):
-        """Build omits module load when modules is empty."""
-        config = make_config(code_dir="/remote/project", modules=[])
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mock_run = mocker.patch("subprocess.run")
+    def test_build_script_no_modules_when_empty(self, mocker):
+        """Build script omits module load when modules is empty."""
+        ctx = make_ctx(code_dir="/remote/project", modules=[])
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc123", log_path="", is_slurm=True, slurm_id=12345
+        )
 
         from rex.commands.build import build
 
-        build(mock_ssh, config)
+        build(mock_executor, ctx)
 
-        script_content = mock_run.call_args.kwargs["input"].decode()
-        assert "module load" not in script_content
+        script = mock_executor.exec_detached.call_args[0][1]
+        assert "module load" not in script
 
-    def test_build_uses_slurm_partition(self, mocker):
-        """Build passes partition to sbatch."""
-        config = make_config(code_dir="/remote/project", partition="gpu-h100")
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mocker.patch("subprocess.run")
+    def test_build_script_includes_clean(self, mocker):
+        """Build script includes rm -rf .venv when clean=True."""
+        ctx = make_ctx(code_dir="/remote/project")
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc123", log_path="", is_slurm=True, slurm_id=12345
+        )
 
         from rex.commands.build import build
 
-        build(mock_ssh, config)
+        build(mock_executor, ctx, clean=True)
 
-        # Check sbatch command includes partition
-        sbatch_call = mock_ssh.exec.call_args[0][0]
-        assert "--partition=gpu-h100" in sbatch_call
+        script = mock_executor.exec_detached.call_args[0][1]
+        assert "rm -rf .venv" in script
 
-    def test_build_no_partition_when_none(self, mocker):
-        """Build omits partition flag when None."""
-        config = make_config(code_dir="/remote/project", partition=None)
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mocker.patch("subprocess.run")
+    def test_build_script_no_clean_by_default(self, mocker):
+        """Build script omits rm when clean=False."""
+        ctx = make_ctx(code_dir="/remote/project")
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc123", log_path="", is_slurm=True, slurm_id=12345
+        )
 
         from rex.commands.build import build
 
-        build(mock_ssh, config)
+        build(mock_executor, ctx, clean=False)
 
-        sbatch_call = mock_ssh.exec.call_args[0][0]
-        assert "--partition" not in sbatch_call
+        script = mock_executor.exec_detached.call_args[0][1]
+        assert "rm -rf .venv" not in script
 
-    def test_build_with_clean_flag(self, mocker):
-        """Build includes rm -rf .venv when clean=True."""
-        config = make_config(code_dir="/remote/project")
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mock_run = mocker.patch("subprocess.run")
+    def test_build_script_uses_code_dir(self, mocker):
+        """Build script cds to code_dir."""
+        ctx = make_ctx(code_dir="/remote/my-project")
+        mock_executor = mocker.Mock()
+        mock_executor.exec_detached.return_value = JobInfo(
+            job_id="build-abc123", log_path="", is_slurm=True, slurm_id=12345
+        )
 
         from rex.commands.build import build
 
-        build(mock_ssh, config, clean=True)
+        build(mock_executor, ctx)
 
-        script_content = mock_run.call_args.kwargs["input"].decode()
-        assert "rm -rf .venv" in script_content
-
-    def test_build_without_clean_flag(self, mocker):
-        """Build omits rm when clean=False."""
-        config = make_config(code_dir="/remote/project")
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mock_run = mocker.patch("subprocess.run")
-
-        from rex.commands.build import build
-
-        build(mock_ssh, config, clean=False)
-
-        script_content = mock_run.call_args.kwargs["input"].decode()
-        assert "rm -rf .venv" not in script_content
-
-    def test_build_returns_zero_on_success(self, mocker):
-        """Build returns 0 when sbatch succeeds."""
-        config = make_config(code_dir="/remote/project")
-
-        mock_ssh = mocker.Mock()
-        mock_ssh.exec.return_value = (0, "12345", "")
-        mock_ssh._opts = []
-        mock_ssh.target = "host"
-
-        mocker.patch("subprocess.run")
-
-        from rex.commands.build import build
-
-        result = build(mock_ssh, config)
-
-        assert result == 0
+        script = mock_executor.exec_detached.call_args[0][1]
+        assert "cd /remote/my-project" in script
