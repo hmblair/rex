@@ -40,7 +40,7 @@ class JobStatus:
     """Status of a job."""
 
     job_id: str
-    status: str  # "running", "done", "unknown"
+    status: str  # "running", "completed", "unknown"
     pid: int | None = None
     slurm_id: int | None = None
     description: str | None = None
@@ -52,7 +52,7 @@ class JobResult:
     """Result of waiting for a job."""
 
     job_id: str
-    status: str  # "done", "failed", "unknown"
+    status: str  # "completed", "failed", "unknown"
     exit_code: int
 
 

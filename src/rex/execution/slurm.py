@@ -416,7 +416,7 @@ REXCMD"""
         state = stdout.strip()
         if state:
             return JobStatus(job_id=job_id, status=state.lower())
-        return JobStatus(job_id=job_id, status="done")
+        return JobStatus(job_id=job_id, status="completed")
 
     def get_log_path(self, job_id: str) -> str | None:
         """Get log file path."""
@@ -462,12 +462,12 @@ REXCMD"""
 
                 if sacct_status == "COMPLETED":
                     success(f"Job {job_id} completed")
-                    return JobResult(job_id=job_id, status="done", exit_code=0)
+                    return JobResult(job_id=job_id, status="completed", exit_code=0)
                 elif sacct_status in ("FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL"):
                     warn(f"Job {job_id} finished: {sacct_status.lower()}")
                     return JobResult(job_id=job_id, status="failed", exit_code=1)
                 else:
                     success(f"Job {job_id} completed")
-                    return JobResult(job_id=job_id, status="done", exit_code=0)
+                    return JobResult(job_id=job_id, status="completed", exit_code=0)
 
             time.sleep(poll_interval)

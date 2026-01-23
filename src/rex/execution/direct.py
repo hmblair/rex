@@ -205,7 +205,7 @@ for log in /tmp/rex-*.log ~/.rex/rex-*.log; do
     if [ -n "$pid" ]; then
         status="running"
     else
-        status="done"
+        status="completed"
         pid="-"
     fi
     # Get first line of script as description
@@ -246,7 +246,7 @@ done
             return JobStatus(job_id=job_id, status="unknown")
 
         pid = int(stdout.strip()) if stdout.strip() else None
-        status = "running" if pid else "done"
+        status = "running" if pid else "completed"
         return JobStatus(job_id=job_id, status=status, pid=pid)
 
     def get_log_path(self, job_id: str) -> str | None:
@@ -293,8 +293,8 @@ done
 
             failures = 0
 
-            if status.status == "done":
+            if status.status == "completed":
                 success(f"Job {job_id} completed")
-                return JobResult(job_id=job_id, status="done", exit_code=0)
+                return JobResult(job_id=job_id, status="completed", exit_code=0)
 
             time.sleep(poll_interval)
