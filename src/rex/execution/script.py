@@ -41,19 +41,11 @@ def get_log_path(ssh: "SSHExecutor", job_id: str) -> str | None:
     return stdout.strip() if stdout.strip() else None
 
 
-def build_context_commands(
-    ctx: "ExecutionContext",
-    *,
-    mkdir_run_dir: bool = False,
-) -> list[str]:
+def build_context_commands(ctx: "ExecutionContext") -> list[str]:
     """Build shell commands for execution context setup.
 
     Returns a list of commands that can be joined with any separator.
     Handles: modules, env vars, venv activation, working directory.
-
-    Args:
-        ctx: Execution context with modules, env, code_dir, run_dir.
-        mkdir_run_dir: If True, create run_dir before cd.
     """
     commands: list[str] = []
 
@@ -68,10 +60,7 @@ def build_context_commands(
         commands.append(f"source {shlex.quote(ctx.code_dir + '/.venv/bin/activate')}")
 
     if ctx.run_dir:
-        if mkdir_run_dir:
-            commands.append(f"mkdir -p {shlex.quote(ctx.run_dir)} && cd {shlex.quote(ctx.run_dir)}")
-        else:
-            commands.append(f"cd {shlex.quote(ctx.run_dir)}")
+        commands.append(f"mkdir -p {shlex.quote(ctx.run_dir)} && cd {shlex.quote(ctx.run_dir)}")
 
     return commands
 
@@ -126,18 +115,8 @@ class ScriptBuilder:
         self._lines.append(cmd)
         return self
 
-    def apply_context(
-        self,
-        ctx: "ExecutionContext",
-        *,
-        mkdir_run_dir: bool = False,
-    ) -> Self:
-        """Apply execution context (modules, env, venv, cd).
-
-        Args:
-            ctx: Execution context.
-            mkdir_run_dir: If True, create run_dir before cd.
-        """
+    def apply_context(self, ctx: "ExecutionContext") -> Self:
+        """Apply execution context (modules, env, venv, cd)."""
         if ctx.modules:
             self.module_load(ctx.modules)
         if ctx.env:
@@ -146,10 +125,7 @@ class ScriptBuilder:
         if ctx.code_dir:
             self.source(f"{ctx.code_dir}/.venv/bin/activate")
         if ctx.run_dir:
-            if mkdir_run_dir:
-                self.run_command(f"mkdir -p {shlex.quote(ctx.run_dir)} && cd {shlex.quote(ctx.run_dir)}")
-            else:
-                self.cd(ctx.run_dir)
+            self.run_command(f"mkdir -p {shlex.quote(ctx.run_dir)} && cd {shlex.quote(ctx.run_dir)}")
         return self
 
     def blank_line(self) -> Self:

@@ -119,7 +119,7 @@ class DirectExecutor:
         )
 
         # Build command
-        context_cmds = build_context_commands(ctx, mkdir_run_dir=True)
+        context_cmds = build_context_commands(ctx)
         env_prefix = "; ".join(context_cmds) + "; " if context_cmds else ""
 
         args_str = " ".join(f"'{a}'" for a in args) if args else ""

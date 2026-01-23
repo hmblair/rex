@@ -166,7 +166,7 @@ class SlurmExecutor:
         self._apply_options_to_builder(builder)
 
         builder.rex_header(f"Script: {remote_script}")
-        builder.apply_context(ctx, mkdir_run_dir=True)
+        builder.apply_context(ctx)
 
         builder.blank_line()
         args_str = " ".join(f"'{a}'" for a in args) if args else ""
