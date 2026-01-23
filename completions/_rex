@@ -43,7 +43,7 @@ _rex() {
         '--status[Check if job is running]:job:_rex_jobs'
         '--log[Show job output]:job:_rex_jobs'
         '--kill[Kill a running job]:job:_rex_jobs'
-        '--watch[Wait for job to complete]:job:_rex_jobs'
+        '*--watch[Wait for job(s) to complete]:job:_rex_jobs'
         '--gpu-info[Show GPU availability and utilization]'
         '--last[Use most recent job]'
         '--json[Output in JSON format]'

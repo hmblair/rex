@@ -83,7 +83,7 @@ Examples:
     parser.add_argument("--status", nargs="?", const="--last", metavar="JOB", help="Check job status")
     parser.add_argument("--log", nargs="?", const="--last", metavar="JOB", help="Show job log")
     parser.add_argument("--kill", nargs="?", const="--last", metavar="JOB", help="Kill job")
-    parser.add_argument("--watch", nargs="?", const="--last", metavar="JOB", help="Wait for job")
+    parser.add_argument("--watch", nargs="*", metavar="JOB", help="Wait for job(s) to complete")
     parser.add_argument("--gpu-info", action="store_true", dest="gpu_info", help="Show GPU info")
 
     parser.add_argument("--push", nargs="+", metavar="PATH", help="Push files")
@@ -426,14 +426,15 @@ def _main(argv: list[str] | None = None) -> int:
                 raise ValidationError("No jobs found")
         return kill_job(executor, job_id)
 
-    if args.watch:
-        from rex.commands.jobs import get_last_job, watch_job
-        job_id = args.watch
-        if args.last or job_id == "--last":
+    if args.watch is not None:
+        from rex.commands.jobs import get_last_job, watch_jobs
+        job_ids = args.watch
+        if not job_ids or args.last:
             job_id = get_last_job(ssh, target)
             if not job_id:
                 raise ValidationError("No jobs found")
-        return watch_job(executor, job_id, args.json)
+            job_ids = [job_id]
+        return watch_jobs(executor, job_ids, args.json)
 
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus

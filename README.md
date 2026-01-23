@@ -137,7 +137,7 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `rex host --status JOB` | Check job status |
 | `rex host --log JOB [-f]` | Show job log (follow with -f) |
 | `rex host --kill JOB` | Kill job |
-| `rex host --watch JOB` | Wait for job completion |
+| `rex host --watch JOB [JOB ...]` | Wait for job(s) to complete |
 | `rex host --gpu-info` | Show GPU utilization |
 | `rex host --push local [remote]` | Upload files |
 | `rex host --pull remote [local]` | Download files |
