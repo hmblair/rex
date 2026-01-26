@@ -144,8 +144,11 @@ def map_to_remote(local_path: Path, remote_home: str) -> str:
 
 
 def job_pattern(job_id: str) -> str:
-    """Build pgrep pattern that won't match itself (character class trick)."""
-    return f"rex-{job_id}[.]py"
+    """Build pgrep pattern that won't match itself (character class trick).
+
+    Matches both Python scripts (.py) and shell scripts (.sh).
+    """
+    return f"rex-{job_id}[.](py|sh)"
 
 
 def generate_job_name() -> str:

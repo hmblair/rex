@@ -129,6 +129,10 @@ class TestDirectExecutorExecDetached:
         ssh.exec.return_value = (0, "12345", "")
         return ssh
 
+    def _get_script_content(self, mock_ssh) -> str:
+        """Extract the script content from the first ssh.exec call (heredoc write)."""
+        return mock_ssh.exec.call_args_list[0][0][0]
+
     def test_exec_detached_double_quotes(self, mock_ssh):
         """exec_detached preserves double quotes."""
         executor = DirectExecutor(mock_ssh)
@@ -136,20 +140,19 @@ class TestDirectExecutorExecDetached:
 
         executor.exec_detached(ctx, 'echo "hello world"', job_name="test")
 
-        # Check the command passed to ssh.exec
-        cmd = mock_ssh.exec.call_args[0][0]
-        assert '"hello world"' in cmd
+        # Check the script content written via heredoc
+        script = self._get_script_content(mock_ssh)
+        assert '"hello world"' in script
 
     def test_exec_detached_single_quotes(self, mock_ssh):
-        """exec_detached escapes single quotes properly."""
+        """exec_detached preserves single quotes."""
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
         executor.exec_detached(ctx, "echo 'hello world'", job_name="test")
 
-        cmd = mock_ssh.exec.call_args[0][0]
-        # Single quotes inside should be escaped
-        assert "hello world" in cmd
+        script = self._get_script_content(mock_ssh)
+        assert "'hello world'" in script
 
     def test_exec_detached_dollar_variable(self, mock_ssh):
         """exec_detached preserves dollar sign variables."""
@@ -158,9 +161,9 @@ class TestDirectExecutorExecDetached:
 
         executor.exec_detached(ctx, "echo $HOME $USER", job_name="test")
 
-        cmd = mock_ssh.exec.call_args[0][0]
-        assert "$HOME" in cmd
-        assert "$USER" in cmd
+        script = self._get_script_content(mock_ssh)
+        assert "$HOME" in script
+        assert "$USER" in script
 
     def test_exec_detached_pipe(self, mock_ssh):
         """exec_detached preserves pipe characters."""
@@ -169,8 +172,8 @@ class TestDirectExecutorExecDetached:
 
         executor.exec_detached(ctx, "ls -la | grep foo", job_name="test")
 
-        cmd = mock_ssh.exec.call_args[0][0]
-        assert "|" in cmd
+        script = self._get_script_content(mock_ssh)
+        assert "|" in script
 
     def test_exec_detached_semicolon(self, mock_ssh):
         """exec_detached preserves semicolons."""
@@ -179,8 +182,8 @@ class TestDirectExecutorExecDetached:
 
         executor.exec_detached(ctx, "cd /tmp; ls; pwd", job_name="test")
 
-        cmd = mock_ssh.exec.call_args[0][0]
-        assert ";" in cmd
+        script = self._get_script_content(mock_ssh)
+        assert ";" in script
 
     def test_exec_detached_ampersand(self, mock_ssh):
         """exec_detached preserves ampersands."""
@@ -189,8 +192,8 @@ class TestDirectExecutorExecDetached:
 
         executor.exec_detached(ctx, "cmd1 && cmd2", job_name="test")
 
-        cmd = mock_ssh.exec.call_args[0][0]
-        assert "&&" in cmd
+        script = self._get_script_content(mock_ssh)
+        assert "&&" in script
 
     def test_exec_detached_complex_command(self, mock_ssh):
         """exec_detached handles complex real-world commands."""
@@ -200,6 +203,23 @@ class TestDirectExecutorExecDetached:
         cmd = '''for f in *.py; do echo "$f"; done'''
         executor.exec_detached(ctx, cmd, job_name="test")
 
-        result_cmd = mock_ssh.exec.call_args[0][0]
-        assert "for" in result_cmd
-        assert "done" in result_cmd
+        script = self._get_script_content(mock_ssh)
+        assert "for" in script
+        assert "done" in script
+
+    def test_exec_detached_writes_script_file(self, mock_ssh):
+        """exec_detached writes command to .sh file for job tracking."""
+        executor = DirectExecutor(mock_ssh)
+        ctx = ExecutionContext()
+
+        executor.exec_detached(ctx, "echo hello", job_name="test-job")
+
+        # First call writes the script
+        write_cmd = mock_ssh.exec.call_args_list[0][0][0]
+        assert "/tmp/rex-test-job.sh" in write_cmd
+        assert "#!/bin/bash -l" in write_cmd
+
+        # Second call runs it via nohup
+        run_cmd = mock_ssh.exec.call_args_list[1][0][0]
+        assert "nohup" in run_cmd
+        assert "/tmp/rex-test-job.sh" in run_cmd

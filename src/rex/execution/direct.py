@@ -178,19 +178,28 @@ chmod +x {remote_cmd}"""
         self, ctx: ExecutionContext, cmd: str, job_name: str
     ) -> JobInfo:
         """Execute shell command detached."""
+        remote_script = f"/tmp/rex-{job_name}.sh"
         remote_log = f"/tmp/rex-{job_name}.log"
 
-        # Build prefix
+        # Build script content
         context_cmds = build_context_commands(ctx)
-        prefix = " && ".join(context_cmds) + " && " if context_cmds else ""
+        prefix = "\n".join(context_cmds) + "\n" if context_cmds else ""
 
-        full_cmd = prefix + cmd
+        script_content = f"#!/bin/bash -l\n{prefix}{cmd}"
 
-        # Escape single quotes for bash -c
-        escaped_cmd = full_cmd.replace("'", "'\\''")
+        # Write script to remote using heredoc
+        write_cmd = f"""cat > {remote_script} << 'REXSCRIPT'
+{script_content}
+REXSCRIPT
+chmod +x {remote_script}"""
+
+        code, _, stderr = self.ssh.exec(write_cmd)
+        if code != 0:
+            from rex.exceptions import ExecutionError
+            raise ExecutionError(f"Failed to write script: {stderr}")
 
         return _run_detached_nohup(
-            self.ssh, escaped_cmd, remote_log, job_name, login_shell=True
+            self.ssh, remote_script, remote_log, job_name, login_shell=False
         )
 
     def list_jobs(self, since_minutes: int = 0) -> list[JobStatus]:
@@ -200,7 +209,7 @@ chmod +x {remote_cmd}"""
 for log in /tmp/rex-*.log ~/.rex/rex-*.log; do
     [ -f "$log" ] || continue
     job=$(basename "$log" .log | sed "s/rex-//")
-    pattern="rex-${job}[.]py"
+    pattern="rex-${job}[.](py|sh)"
     pid=$(pgrep -f "$pattern" 2>/dev/null | head -1)
     if [ -n "$pid" ]; then
         status="running"
@@ -208,12 +217,15 @@ for log in /tmp/rex-*.log ~/.rex/rex-*.log; do
         status="completed"
         pid="-"
     fi
-    # Get first line of script as description
+    # Get first line of script as description (check both .py and .sh)
     desc=""
-    script_tmp="/tmp/rex-${job}.py"
-    if [ -f "$script_tmp" ]; then
-        desc=$(head -1 "$script_tmp" | sed "s/^#[[:space:]]*//" | cut -c1-40)
-    fi
+    for ext in py sh; do
+        script_tmp="/tmp/rex-${job}.${ext}"
+        if [ -f "$script_tmp" ]; then
+            desc=$(head -1 "$script_tmp" | sed "s/^#[[:space:]]*//" | cut -c1-40)
+            break
+        fi
+    done
     printf "%s\\t%s\\t%s\\t%s\\n" "$job" "$status" "$pid" "$desc"
 done
 '''

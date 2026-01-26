@@ -279,12 +279,12 @@ class TestJobPattern:
     def test_basic_pattern(self):
         """job_pattern returns correct pgrep pattern."""
         result = job_pattern("myexp")
-        assert result == "rex-myexp[.]py"
+        assert result == "rex-myexp[.](py|sh)"
 
     def test_pattern_with_special_chars(self):
         """Pattern handles job IDs with dashes/underscores."""
         result = job_pattern("exp-1_run")
-        assert result == "rex-exp-1_run[.]py"
+        assert result == "rex-exp-1_run[.](py|sh)"
 
 
 class TestGenerateJobName:
