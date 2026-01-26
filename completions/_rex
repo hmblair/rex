@@ -72,6 +72,7 @@ _rex() {
         '--connect[Open persistent SSH connection]'
         '--disconnect[Close persistent SSH connection]'
         '--connection[Show connection status]'
+        '--manual[Open interactive SSH session]'
     )
 
     _arguments -s \

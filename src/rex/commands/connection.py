@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import subprocess
+
 from rex.exceptions import SSHError
 from rex.output import error
 from rex.ssh.connection import SSHConnection
+from rex.ssh.executor import SSHExecutor
+
+
+def manual_ssh(ssh: SSHExecutor) -> int:
+    """Open interactive SSH session to target."""
+    # Run ssh with TTY allocation for interactive shell
+    result = subprocess.run(["ssh", *ssh._opts, "-t", ssh.target])
+    return result.returncode
 
 
 def connect(target: str) -> int:

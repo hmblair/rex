@@ -54,6 +54,7 @@ Examples:
   rex gpu --sync                      # sync current project to remote
   rex gpu --connect                   # open persistent connection
   rex gpu --disconnect                # close connection when done
+  rex gpu --manual                    # open interactive SSH session
 """,
     )
 
@@ -149,6 +150,9 @@ Examples:
     )
     parser.add_argument(
         "--connection", action="store_true", help="Show connection status"
+    )
+    parser.add_argument(
+        "--manual", action="store_true", help="Open interactive SSH session"
     )
 
     # Modifiers
@@ -472,6 +476,11 @@ def _main(argv: list[str] | None = None) -> int:
         from rex.commands.connection import connection_status
 
         return connection_status(target)
+
+    if args.manual:
+        from rex.commands.connection import manual_ssh
+
+        return manual_ssh(ssh)
 
     # Verify SSH connection works before running any commands
     ssh.check_connection()
