@@ -70,7 +70,15 @@ class GlobalConfig:
             return cls(aliases={}, hosts={})
 
         with open(path, "rb") as f:
-            data = tomli.load(f)
+            try:
+                data = tomli.load(f)
+            except tomli.TOMLDecodeError as e:
+                msg = str(e)
+                if "Cannot overwrite a value" in msg:
+                    msg = f"Duplicate key in {path}: {msg}"
+                else:
+                    msg = f"Invalid TOML in {path}: {msg}"
+                raise ConfigError(msg) from None
 
         aliases = data.get("aliases", {})
         hosts: dict[str, HostConfig] = {}

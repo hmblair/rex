@@ -1,7 +1,6 @@
 """Tests for global configuration."""
 
 import pytest
-from pathlib import Path
 
 from rex.config.global_config import GlobalConfig, HostConfig, KNOWN_HOST_FIELDS
 from rex.exceptions import ConfigError
@@ -202,6 +201,22 @@ unknown_field = "value"
         captured = capsys.readouterr()
         assert "unknown fields" in captured.err
         assert "unknown_field" in captured.err
+
+    def test_duplicate_alias_gives_informative_error(self, tmp_path):
+        """Duplicate keys give an informative error message."""
+        config = tmp_path / "config.toml"
+        config.write_text(
+            """
+[aliases]
+cluster = "user@host1.example.com"
+cluster = "user@host2.example.com"
+"""
+        )
+
+        with pytest.raises(ConfigError) as exc:
+            GlobalConfig.load(config)
+        assert "Duplicate key" in str(exc.value)
+        assert str(config) in str(exc.value)
 
 
 class TestExpandAlias:
