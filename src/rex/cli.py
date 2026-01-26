@@ -51,6 +51,7 @@ Examples:
   rex gpu -s --exec "nvidia-smi"      # run shell command via SLURM
   rex gpu --exec-login "ls -la"       # run on login node (even with -s)
   rex gpu --read ~/data               # read file or list directory
+  rex gpu --read                      # list code_dir
   rex gpu --sync                      # sync current project to remote
   rex gpu --connect                   # open persistent connection
   rex gpu --disconnect                # close connection when done
@@ -139,7 +140,8 @@ Examples:
         "--exec-login", dest="exec_login", metavar="CMD", help="Execute on login node"
     )
     parser.add_argument(
-        "--read", dest="read_path", metavar="PATH", help="Read file or list directory"
+        "--read", dest="read_path", nargs="?", const="", metavar="PATH",
+        help="Read file or list directory (default: code_dir)"
     )
 
     parser.add_argument(
@@ -603,11 +605,14 @@ def _main(argv: list[str] | None = None) -> int:
             return result
         return 0
 
-    if args.read_path:
+    if args.read_path is not None:
         # Always run on login node
         from rex.commands.read import read_remote
 
-        return read_remote(ssh, args.read_path)
+        path = args.read_path or ctx.code_dir
+        if not path:
+            raise ConfigError("No path specified and code_dir not configured")
+        return read_remote(ssh, path)
 
     # Default: run Python script
     script = Path(args.script) if args.script else None
