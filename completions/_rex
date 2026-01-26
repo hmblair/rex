@@ -1,11 +1,21 @@
 #compdef rex
 
 _rex_aliases() {
-    local config="$HOME/.config/rex"
+    local config="$HOME/.config/rex/config.toml"
     [[ -f $config ]] || return
     local -a aliases
-    while IFS='=' read -r name _; do
-        [[ -n $name && $name != \#* ]] && aliases+=("${name## }")
+    local in_aliases=0
+    while IFS= read -r line; do
+        # Check for [aliases] section
+        [[ $line == "[aliases]" ]] && in_aliases=1 && continue
+        # Exit on next section
+        [[ $line == "["* ]] && in_aliases=0
+        # Parse alias names in [aliases] section
+        if (( in_aliases )) && [[ $line == *"="* ]]; then
+            local name="${line%%=*}"
+            name="${name// /}"  # trim spaces
+            [[ -n $name ]] && aliases+=("$name")
+        fi
     done < "$config"
     compadd -a aliases
 }
