@@ -22,7 +22,7 @@ def push(
         return 0
     except TransferError as e:
         error(e.message, exit_now=False)
-        return 1
+        return e.exit_code
 
 
 def pull(
@@ -36,7 +36,7 @@ def pull(
         return 0
     except TransferError as e:
         error(e.message, exit_now=False)
-        return 1
+        return e.exit_code
 
 
 def sync(
@@ -69,7 +69,7 @@ def sync(
         transfer.sync(local_path, remote_path)
     except TransferError as e:
         error(e.message, exit_now=False)
-        return 1
+        return e.exit_code
 
     # Pip install if applicable
     if not no_install and remote_path is None:

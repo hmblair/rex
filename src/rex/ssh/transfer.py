@@ -71,7 +71,7 @@ class FileTransfer:
 
         result = subprocess.run(args)
         if result.returncode != 0:
-            raise TransferError("Push failed")
+            raise TransferError(f"Push failed (rsync exit {result.returncode})", result.returncode)
 
         success(f"Pushed {local.name}")
 
@@ -96,7 +96,7 @@ class FileTransfer:
         result = subprocess.run(args)
 
         if result.returncode != 0:
-            raise TransferError("Pull failed")
+            raise TransferError(f"Pull failed (rsync exit {result.returncode})", result.returncode)
 
         success(f"Pulled to {local}")
 
@@ -145,6 +145,6 @@ class FileTransfer:
 
         result = subprocess.run(args)
         if result.returncode != 0:
-            raise TransferError("Sync failed")
+            raise TransferError(f"Sync failed (rsync exit {result.returncode})", result.returncode)
 
         success(f"Synced {local.name}")
