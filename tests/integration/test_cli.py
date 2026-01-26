@@ -205,3 +205,90 @@ class TestMainJobNameValidation:
         # Should get past validation (check_connection called before running)
         mock_ssh.check_connection.assert_called_once()
         mock_run.assert_called_once()
+
+
+class TestFlagConflictValidation:
+    """Tests for conflicting flag validation."""
+
+    def test_conflicting_commands_rejected(self, capsys):
+        """Multiple command flags are rejected."""
+        result = main(["user@host", "--build", "--exec", "ls"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Conflicting commands" in captured.err
+        assert "--build" in captured.err
+        assert "--exec" in captured.err
+
+    def test_conflicting_commands_three_flags(self, capsys):
+        """Three command flags shows all in error."""
+        result = main(["user@host", "--jobs", "--build", "--sync"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--jobs" in captured.err
+        assert "--build" in captured.err
+        assert "--sync" in captured.err
+
+    def test_gpu_cpu_mutually_exclusive(self, capsys):
+        """--gpu and --cpu cannot be used together."""
+        result = main(["user@host", "--gpu", "--cpu", "script.py"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--gpu and --cpu are mutually exclusive" in captured.err
+
+    def test_follow_requires_log(self, capsys):
+        """--follow requires --log."""
+        result = main(["user@host", "--follow", "--jobs"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--follow requires --log" in captured.err
+
+    def test_follow_with_log_allowed(self, mocker):
+        """--follow with --log is allowed."""
+        from rex.config.global_config import GlobalConfig
+        mocker.patch.object(GlobalConfig, "load", return_value=GlobalConfig(aliases={}, hosts={}))
+        mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
+        mock_ssh = mocker.MagicMock()
+        mocker.patch("rex.cli.SSHExecutor", return_value=mock_ssh)
+        mocker.patch("rex.commands.jobs.show_log", return_value=0)
+
+        # Should not raise conflict error (may fail later due to missing job)
+        result = main(["user@host", "--log", "job123", "--follow"])
+        # Connection check happens, so we get past validation
+        mock_ssh.check_connection.assert_called_once()
+
+    def test_clean_requires_build(self, capsys):
+        """--clean requires --build."""
+        result = main(["user@host", "--clean", "script.py"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--clean requires --build" in captured.err
+
+    def test_no_install_requires_sync(self, capsys):
+        """--no-install requires --sync."""
+        result = main(["user@host", "--no-install", "script.py"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--no-install requires --sync" in captured.err
+
+    def test_last_requires_job_command(self, capsys):
+        """--last requires a job command."""
+        result = main(["user@host", "--last", "script.py"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--last requires" in captured.err
+
+    def test_since_requires_jobs(self, capsys):
+        """--since requires --jobs."""
+        result = main(["user@host", "--since", "30", "script.py"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--since requires --jobs" in captured.err
+
+    def test_single_command_allowed(self, mocker):
+        """Single command flag is allowed."""
+        mock_status = mocker.patch("rex.commands.connection.connection_status", return_value=0)
+
+        result = main(["user@host", "--connection"])
+
+        assert result == 0
+        mock_status.assert_called_once()

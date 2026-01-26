@@ -372,10 +372,83 @@ def main(argv: list[str] | None = None) -> int:
         return 130
 
 
+def _validate_flag_conflicts(args: argparse.Namespace) -> None:
+    """Validate that conflicting flags are not used together."""
+    # Command flags - only one allowed
+    commands = []
+    if args.jobs:
+        commands.append("--jobs")
+    if args.status:
+        commands.append("--status")
+    if args.log:
+        commands.append("--log")
+    if args.kill:
+        commands.append("--kill")
+    if args.watch is not None:
+        commands.append("--watch")
+    if args.gpu_info:
+        commands.append("--gpu-info")
+    if args.push:
+        commands.append("--push")
+    if args.pull:
+        commands.append("--pull")
+    if args.sync is not None:
+        commands.append("--sync")
+    if args.build:
+        commands.append("--build")
+    if args.exec_cmd:
+        commands.append("--exec")
+    if args.exec_code_dir:
+        commands.append("--exec-code-dir")
+    if args.exec_login:
+        commands.append("--exec-login")
+    if args.read_path is not None:
+        commands.append("--read")
+    if args.connect:
+        commands.append("--connect")
+    if args.disconnect:
+        commands.append("--disconnect")
+    if args.connection:
+        commands.append("--connection")
+    if args.manual:
+        commands.append("--manual")
+
+    if len(commands) > 1:
+        raise ValidationError(f"Conflicting commands: {', '.join(commands)}")
+
+    # --gpu and --cpu are mutually exclusive
+    if args.gpu and args.cpu:
+        raise ValidationError("--gpu and --cpu are mutually exclusive")
+
+    # --follow only valid with --log
+    if args.follow and not args.log:
+        raise ValidationError("--follow requires --log")
+
+    # --clean only valid with --build
+    if args.clean and not args.build:
+        raise ValidationError("--clean requires --build")
+
+    # --no-install only valid with --sync
+    if args.no_install and args.sync is None:
+        raise ValidationError("--no-install requires --sync")
+
+    # --last only valid with job commands
+    job_commands = args.status or args.log or args.kill or args.watch is not None
+    if args.last and not job_commands:
+        raise ValidationError("--last requires --status, --log, --kill, or --watch")
+
+    # --since only valid with --jobs
+    if args.since and not args.jobs:
+        raise ValidationError("--since requires --jobs")
+
+
 def _main(argv: list[str] | None = None) -> int:
     """Internal main function that may raise RexError."""
     parser = build_parser()
     args = parser.parse_intermixed_args(argv)
+
+    # Validate flag conflicts early
+    _validate_flag_conflicts(args)
 
     # Special case: --connection without target lists all
     if args.connection and not args.target:
