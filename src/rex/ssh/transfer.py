@@ -37,6 +37,11 @@ class FileTransfer:
         self.target = target
         self.executor = executor
 
+    def _remote_is_dir(self, remote: str) -> bool:
+        """Check if a remote path is a directory."""
+        code, _, _ = self.executor.exec(f"test -d {shell_quote(remote)}")
+        return code == 0
+
     def push(self, local: Path, remote: str | None = None) -> None:
         """Upload file/directory to remote.
 
@@ -87,12 +92,30 @@ class FileTransfer:
             local = Path.cwd()
         local = local.resolve()
 
-        # Create local directory
-        local.mkdir(parents=True, exist_ok=True)
+        # Check whether the remote path is a file or directory
+        remote_is_dir = self._remote_is_dir(remote)
+
+        if local.is_dir():
+            # Existing directory: pull into it
+            args_dest = f"{local}/"
+        elif local.is_file():
+            if remote_is_dir:
+                raise TransferError(
+                    f"Cannot pull directory into existing file: {local}"
+                )
+            args_dest = str(local)
+        else:
+            # Local doesn't exist: create based on what the remote is
+            if remote_is_dir:
+                local.mkdir(parents=True, exist_ok=True)
+                args_dest = f"{local}/"
+            else:
+                local.parent.mkdir(parents=True, exist_ok=True)
+                args_dest = str(local)
 
         info(f"Pulling from {self.target}:{remote}")
 
-        args = ["rsync", "-avz", "--progress", f"{self.target}:{remote}", f"{local}/"]
+        args = ["rsync", "-avz", "--progress", f"{self.target}:{remote}", args_dest]
         result = subprocess.run(args)
 
         if result.returncode != 0:

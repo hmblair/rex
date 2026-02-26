@@ -121,6 +121,7 @@ class TestFileTransferPull:
     def test_pull_rsync_failure(self, mock_ssh_executor, tmp_path, mocker):
         """Pull raises TransferError if rsync fails."""
         transfer = FileTransfer("user@host", mock_ssh_executor)
+        mock_ssh_executor.exec.return_value = (1, "", "")  # remote is file
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = MagicMock(returncode=1)
 
@@ -128,33 +129,65 @@ class TestFileTransferPull:
             transfer.pull("~/remote/file.txt", tmp_path)
         assert "Pull failed" in exc_info.value.message
 
-    def test_pull_success(self, mock_ssh_executor, tmp_path, mocker):
-        """Pull succeeds with valid remote path."""
+    def test_pull_file_into_existing_dir(self, mock_ssh_executor, tmp_path, mocker):
+        """Pull into existing directory uses trailing slash."""
         transfer = FileTransfer("user@host", mock_ssh_executor)
+        mock_ssh_executor.exec.return_value = (1, "", "")  # remote is file
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = MagicMock(returncode=0)
 
         transfer.pull("~/remote/file.txt", tmp_path)
 
-        mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert args[0] == "rsync"
         assert "user@host:~/remote/file.txt" in args[-2]
+        assert args[-1] == f"{tmp_path}/"
 
-    def test_pull_creates_local_dir(self, mock_ssh_executor, tmp_path, mocker):
-        """Pull creates local directory if it doesn't exist."""
+    def test_pull_file_to_nonexistent_path(self, mock_ssh_executor, tmp_path, mocker):
+        """Pull remote file to nonexistent path saves as that path."""
         transfer = FileTransfer("user@host", mock_ssh_executor)
+        mock_ssh_executor.exec.return_value = (1, "", "")  # remote is file
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = MagicMock(returncode=0)
+
+        file_dest = tmp_path / "subdir" / "output.png"
+        transfer.pull("~/remote/file.txt", file_dest)
+
+        assert file_dest.parent.exists()
+        assert not file_dest.exists()
+        args = mock_run.call_args[0][0]
+        assert args[-1] == str(file_dest)
+
+    def test_pull_dir_to_nonexistent_path(self, mock_ssh_executor, tmp_path, mocker):
+        """Pull remote directory to nonexistent path creates local dir."""
+        transfer = FileTransfer("user@host", mock_ssh_executor)
+        mock_ssh_executor.exec.return_value = (0, "", "")  # remote is dir
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = MagicMock(returncode=0)
 
         new_dir = tmp_path / "new" / "nested"
-        transfer.pull("~/file.txt", new_dir)
+        transfer.pull("~/remote/dir", new_dir)
 
-        assert new_dir.exists()
+        assert new_dir.exists() and new_dir.is_dir()
+        args = mock_run.call_args[0][0]
+        assert args[-1] == f"{new_dir}/"
+
+    def test_pull_dir_into_existing_file_raises(self, mock_ssh_executor, tmp_path, mocker):
+        """Pull remote directory into existing file raises error."""
+        transfer = FileTransfer("user@host", mock_ssh_executor)
+        mock_ssh_executor.exec.return_value = (0, "", "")  # remote is dir
+
+        existing_file = tmp_path / "file.txt"
+        existing_file.write_text("content")
+
+        with pytest.raises(TransferError) as exc_info:
+            transfer.pull("~/remote/dir", existing_file)
+        assert "Cannot pull directory into existing file" in exc_info.value.message
 
     def test_pull_default_local(self, mock_ssh_executor, mocker):
         """Pull uses cwd when local is None."""
         transfer = FileTransfer("user@host", mock_ssh_executor)
+        mock_ssh_executor.exec.return_value = (1, "", "")  # remote is file
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = MagicMock(returncode=0)
 
