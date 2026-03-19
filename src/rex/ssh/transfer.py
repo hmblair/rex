@@ -37,6 +37,12 @@ class FileTransfer:
         self.target = target
         self.executor = executor
 
+    def _rsync_ssh_arg(self) -> list[str]:
+        """Build rsync -e flag to reuse the SSH multiplexed socket."""
+        opts = self.executor._build_opts()
+        ssh_cmd = "ssh " + " ".join(shell_quote(o) for o in opts)
+        return ["-e", ssh_cmd]
+
     def _remote_is_dir(self, remote: str) -> bool:
         """Check if a remote path is a directory."""
         code, _, _ = self.executor.exec(f"test -d {shell_quote(remote)}")
@@ -69,10 +75,11 @@ class FileTransfer:
 
         info(f"Pushing to {self.target}:{remote}")
 
+        ssh_arg = self._rsync_ssh_arg()
         if local.is_dir():
-            args = ["rsync", "-avz", "--progress", f"{local}/", f"{self.target}:{remote}/"]
+            args = ["rsync", "-avz", "--progress"] + ssh_arg + [f"{local}/", f"{self.target}:{remote}/"]
         else:
-            args = ["rsync", "-avz", "--progress", str(local), f"{self.target}:{remote}"]
+            args = ["rsync", "-avz", "--progress"] + ssh_arg + [str(local), f"{self.target}:{remote}"]
 
         result = subprocess.run(args)
         if result.returncode != 0:
@@ -115,7 +122,7 @@ class FileTransfer:
 
         info(f"Pulling from {self.target}:{remote}")
 
-        args = ["rsync", "-avz", "--progress", f"{self.target}:{remote}", args_dest]
+        args = ["rsync", "-avz", "--progress"] + self._rsync_ssh_arg() + [f"{self.target}:{remote}", args_dest]
         result = subprocess.run(args)
 
         if result.returncode != 0:
@@ -159,7 +166,7 @@ class FileTransfer:
         if excludes is None:
             excludes = PYTHON_EXCLUDES
 
-        args = ["rsync", "-avz"]
+        args = ["rsync", "-avz"] + self._rsync_ssh_arg()
         if delete:
             args.append("--delete")
         for ex in excludes:
