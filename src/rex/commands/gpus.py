@@ -189,8 +189,9 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
         return 0
 
     # Get partition-specific GPU usage from running jobs
+    # Use -O tres-alloc which reliably shows gres/gpu=N even for --gres submissions
     code, job_info, _ = ssh.exec(
-        f"squeue {partition_opt} -t running -o '%N %b' --noheader 2>/dev/null"
+        f"squeue {partition_opt} -t running -O 'NodeList:30,tres-alloc:80' --noheader 2>/dev/null"
     )
 
     # Count GPUs used per node (partition jobs only)
@@ -201,14 +202,15 @@ def show_slurm_gpus(ssh: SSHExecutor, partition: str | None = None) -> int:
         parts = line.split()
         if len(parts) >= 2:
             job_node = parts[0]
-            gres_req = parts[1]
-            # Parse gpu count from gres/gpu:N
-            if "gpu:" in gres_req:
+            tres = parts[1]
+            # Parse gpu count from tres-alloc (e.g., "cpu=32,gres/gpu=8,mem=256G")
+            if "gres/gpu=" in tres:
                 try:
-                    gpu_count = int(gres_req.split("gpu:")[-1])
+                    gpu_str = tres.split("gres/gpu=")[1].split(",")[0]
+                    gpu_count = int(gpu_str)
                     if job_node in node_used:
                         node_used[job_node] += gpu_count
-                except ValueError:
+                except (ValueError, IndexError):
                     pass
 
     # Print per-node info
