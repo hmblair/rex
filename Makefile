@@ -4,7 +4,7 @@ COMPLETIONS  ?= $(HOME)/.local/share/zsh/site-functions
 .PHONY: install uninstall
 
 install:
-	@pip install -e .
+	@uv pip install -e .
 	@mkdir -p $(COMPLETIONS)
 	@cp completions/_rex $(COMPLETIONS)/_rex
 	@echo 'Installed rex completions to $(COMPLETIONS)/_rex'
@@ -16,7 +16,7 @@ install:
 	@echo 'Updated rex instructions in $(CLAUDE_MD)'
 
 uninstall:
-	@pip uninstall -y rex 2>/dev/null || true
+	@uv pip uninstall rex 2>/dev/null || true
 	@rm -f $(COMPLETIONS)/_rex
 	@if [ -f $(CLAUDE_MD) ]; then \
 		sed '/rex:start/,/rex:end/d' $(CLAUDE_MD) > $(CLAUDE_MD).tmp && \
