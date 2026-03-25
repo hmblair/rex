@@ -112,11 +112,20 @@ class DirectExecutor:
         remote_script = f"/tmp/rex-{job_name}.py"
         remote_log = f"/tmp/rex-{job_name}.log"
 
-        # Copy script via scp
-        subprocess.run(
-            ["scp", "-q", str(script_path), f"{self.ssh.target}:{remote_script}"],
-            check=True,
+        # Copy script via SSH control socket (bare scp doesn't reuse it)
+        with open(script_path) as f:
+            script_content = f.read()
+        result = subprocess.run(
+            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_script}"],
+            input=script_content.encode(),
+            capture_output=True,
         )
+        if result.returncode != 0:
+            from rex.exceptions import ExecutionError
+            stderr = result.stderr.decode().strip()
+            raise ExecutionError(
+                f"Failed to copy script to remote: {stderr or 'unknown error'}"
+            )
 
         # Build command
         context_cmds = build_context_commands(ctx)
