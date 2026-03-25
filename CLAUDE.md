@@ -26,8 +26,8 @@ rex sherlock --pull ~/remote ./local          # download
 
 # Remote shell
 rex sherlock --exec "nvidia-smi"              # run from run_dir
-rex sherlock --exec-code-dir "pytest"         # run from code_dir
-rex sherlock --exec-login "ls"                # run on login node (no SLURM)
+rex sherlock --exec --code-dir "pytest"       # run from code_dir
+rex sherlock --exec --login-node "ls"         # run on login node (bypass SLURM)
 rex sherlock --read ~/path                    # read remote file or list directory
 
 # SLURM overrides

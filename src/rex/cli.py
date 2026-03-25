@@ -49,7 +49,8 @@ Examples:
   rex gpu --pull ~/checkpoints ./     # download directory
   rex gpu --exec "ls -la ~/models"    # run shell command
   rex gpu -s --exec "nvidia-smi"      # run shell command via SLURM
-  rex gpu --exec-login "ls -la"       # run on login node (even with -s)
+  rex gpu --exec --login-node "ls"    # run on login node (bypass SLURM)
+  rex gpu --exec --code-dir "pytest"  # run from code_dir
   rex gpu --read ~/data               # read file or list directory
   rex gpu --read                      # list code_dir
   rex gpu --sync                      # sync current project to remote
@@ -131,13 +132,14 @@ Examples:
         "--exec", dest="exec_cmd", metavar="CMD", help="Execute shell command"
     )
     parser.add_argument(
-        "--exec-code-dir",
-        dest="exec_code_dir",
-        metavar="CMD",
-        help="Execute in code_dir",
+        "--login-node",
+        action="store_true",
+        help="Run on login node (bypass SLURM); no-op without SLURM",
     )
     parser.add_argument(
-        "--exec-login", dest="exec_login", metavar="CMD", help="Execute on login node"
+        "--code-dir",
+        action="store_true",
+        help="Use code_dir as working directory instead of run_dir",
     )
     parser.add_argument(
         "--read", dest="read_path", nargs="?", const="", metavar="PATH",
@@ -398,10 +400,6 @@ def _validate_flag_conflicts(args: argparse.Namespace) -> None:
         commands.append("--build")
     if args.exec_cmd:
         commands.append("--exec")
-    if args.exec_code_dir:
-        commands.append("--exec-code-dir")
-    if args.exec_login:
-        commands.append("--exec-login")
     if args.read_path is not None:
         commands.append("--read")
     if args.connect:
@@ -440,6 +438,12 @@ def _validate_flag_conflicts(args: argparse.Namespace) -> None:
     # --since only valid with --jobs
     if args.since and not args.jobs:
         raise ValidationError("--since requires --jobs")
+
+    # --login-node and --code-dir only valid with --exec
+    if args.login_node and not args.exec_cmd:
+        raise ValidationError("--login-node requires --exec")
+    if args.code_dir and not args.exec_cmd:
+        raise ValidationError("--code-dir requires --exec")
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -650,30 +654,22 @@ def _main(argv: list[str] | None = None) -> int:
     if args.exec_cmd:
         from rex.commands.exec import exec_command
 
-        result = exec_command(executor, ctx, args.exec_cmd, args.detach, args.name)
-        if isinstance(result, int):
-            return result
-        return 0
+        exec_executor = executor
+        exec_ctx = ctx
 
-    if args.exec_code_dir:
-        from dataclasses import replace
-        from rex.commands.exec import exec_command
+        # --login-node: bypass SLURM, run directly on login node
+        if args.login_node:
+            exec_executor = DirectExecutor(ssh)
 
-        # Use code_dir as working directory instead of run_dir
-        code_ctx = replace(ctx, run_dir=ctx.code_dir)
+        # --code-dir: use code_dir as working directory
+        if args.code_dir:
+            from dataclasses import replace
+
+            exec_ctx = replace(ctx, run_dir=ctx.code_dir)
+
         result = exec_command(
-            executor, code_ctx, args.exec_code_dir, args.detach, args.name
+            exec_executor, exec_ctx, args.exec_cmd, args.detach, args.name
         )
-        if isinstance(result, int):
-            return result
-        return 0
-
-    if args.exec_login:
-        # Always use direct executor for login node
-        direct = DirectExecutor(ssh)
-        from rex.commands.exec import exec_command
-
-        result = exec_command(direct, ctx, args.exec_login, args.detach, args.name)
         if isinstance(result, int):
             return result
         return 0

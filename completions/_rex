@@ -75,7 +75,8 @@ _rex() {
 
     local -a exec_options=(
         '--exec[Execute shell command on remote]:command:'
-        '--exec-login[Execute on login node (bypass SLURM)]:command:'
+        '--login-node[Run on login node (bypass SLURM)]'
+        '--code-dir[Use code_dir as working directory]'
     )
 
     local -a connection_options=(

@@ -128,8 +128,8 @@ rex sherlock --build --gpu   # builds on gpu_partition
 | `rex host -d script.py` | Run detached (background) |
 | `rex host -s -d script.py` | Submit via sbatch |
 | `rex host --exec "cmd"` | Run shell command (from run_dir) |
-| `rex host --exec-code-dir "cmd"` | Run shell command (from code_dir) |
-| `rex host --exec-login "cmd"` | Run command on login node |
+| `rex host --exec --code-dir "cmd"` | Run shell command (from code_dir) |
+| `rex host --exec --login-node "cmd"` | Run on login node (bypass SLURM) |
 | `rex host --read PATH` | Read file or list directory |
 | `rex --jobs` | List jobs on all connected hosts |
 | `rex host --jobs` | List jobs on specific host |
