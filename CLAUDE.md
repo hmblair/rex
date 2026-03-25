@@ -1,154 +1,58 @@
 <!-- rex:start -->
-# Remote Execution with rex
+# rex — Remote Execution CLI
 
-When you need to run code that requires a GPU (training models, large batch inference, CUDA operations), use `rex` to execute on the remote cluster. The local machine has no GPU.
+Use `rex` to run anything requiring a GPU or remote execution. The local machine has no GPU.
 
-## When to Use rex
+Aliases are defined in `~/.config/rex/config.toml` (e.g. `sherlock`, `imp`). Project config lives in `.rex.toml` (only `name` is required; everything else inherits from host config).
 
-- **Training neural networks** - Any PyTorch/TensorFlow training loop
-- **GPU-accelerated inference** - Batch predictions on large datasets
-- **CUDA operations** - Anything requiring `torch.cuda` or GPU tensors
-- **Memory-intensive operations** - When local RAM is insufficient
-- **Remote shell commands** - Any command needing remote execution
-
-## Available Aliases
-
-Defined in `~/.config/rex/config.toml`. Check the file for the full list. Common aliases include:
-
-```
-sherlock = hmblair@sherlock (SLURM cluster, default_slurm=true)
-imp      = hmblair@imp (direct SSH, no SLURM)
-```
-
-Host-specific defaults (code_dir, run_dir, modules, partitions, etc.) are configured per-host in the global config.
-
-Most examples below use `sherlock`. Other aliases work similarly (with or without SLURM depending on host config).
-
-## Project Config (.rex.toml)
-
-Projects only need a `name` field. All other settings inherit from the host config:
-
-```toml
-name = "projectname"
-
-# Optional overrides
-time = "4:00:00"        # override host default
-
-[env]
-PROJECT_VAR = "value"                   # project-specific env vars
-PATH = "$PATH:/project/bin"             # variable expansion supported
-```
-
-Paths are computed automatically from host config:
-- `code_dir` = `/home/groups/rhiju/hmblair/projectname`
-- `run_dir` = `/scratch/users/hmblair/projectname`
-
-Config merge priority: CLI args > project .rex.toml > host config > defaults
-
-## Basic Workflow
+## Common Commands
 
 ```bash
-# Run a script on CPU partition (default)
-rex sherlock script.py
+rex sherlock script.py                        # run on CPU partition
+rex sherlock --gpu script.py                  # run on GPU partition
+rex sherlock -d --gpu train.py -- --epochs 100  # detached GPU job
 
-# Run on GPU partition
-rex sherlock --gpu script.py
+# Job management
+rex sherlock --jobs                           # list jobs
+rex sherlock --status                         # check most recent job
+rex sherlock --log -f                         # follow most recent job output
+rex sherlock --watch                          # block until most recent job completes
+rex sherlock --kill <job-id>                  # stop a job
 
-# For long-running jobs, detach to survive disconnection
-rex sherlock -d --gpu train.py -- --epochs 100
-# Returns: job ID like 20251229-161516
+# File transfer
+rex sherlock --sync                           # sync project to remote code_dir
+rex sherlock --push ./local ~/remote          # upload
+rex sherlock --pull ~/remote ./local          # download
 
-# Monitor detached jobs
-rex --jobs                              # list jobs on all connected hosts
-rex sherlock --jobs                     # list jobs on specific host
-rex sherlock --jobs --since 30          # include finished jobs from last 30 mins
-rex sherlock --status 20251229-161516   # check specific job
-rex sherlock --status                   # check most recent job
-rex sherlock --log 20251229-161516      # view output
-rex sherlock --log -f                   # follow most recent job's output
-rex sherlock --kill 20251229-161516     # stop specific job
+# Remote shell
+rex sherlock --exec "nvidia-smi"              # run from run_dir
+rex sherlock --exec-code-dir "pytest"         # run from code_dir
+rex sherlock --exec-login "ls"                # run on login node (no SLURM)
+rex sherlock --read ~/path                    # read remote file or list directory
 
-# Wait for job(s) to complete
-rex sherlock --watch 20251229-161516    # blocks until done
-rex sherlock --watch                    # watch most recent job
-rex sherlock --watch job1 job2 job3     # watch multiple jobs
+# SLURM overrides
+rex sherlock --mem 32G --time 4:00:00 --cpus 8 --gres gpu:2 script.py
+rex sherlock --constraint a100 script.py      # node constraint
 ```
 
-## File Transfer & Sync
+## Typical Workflow
 
 ```bash
-rex sherlock --push ./data ~/data                 # upload to remote
-rex sherlock --pull ~/checkpoints ./checkpoints   # download from remote
-rex sherlock --sync                               # sync project to code_dir
+rex sherlock --sync                           # 1. push code
+rex sherlock -d --gpu script.py               # 2. launch job
+rex sherlock --watch                          # 3. wait
+rex sherlock --pull ~/output ./output         # 4. fetch results
 ```
 
-## Shell Commands
+## Setup & Build
 
 ```bash
-rex sherlock --exec "nvidia-smi"          # runs from run_dir
-rex sherlock --exec-code-dir "pytest"     # runs from code_dir
-rex sherlock --exec-login "ls"            # runs on login node (no SLURM allocation)
-rex sherlock -d --exec "wget https://..." # detached
+rex sherlock --sync && rex sherlock --build    # sync code, create venv + pip install -e .
+rex sherlock --build --clean                  # rebuild venv from scratch
 ```
 
-## Reading Remote Files
+## Notes
 
-```bash
-rex sherlock --read                       # list code_dir contents
-rex sherlock --read ~/data                # list directory contents
-rex sherlock --read ~/config.yaml         # display file contents
-```
-
-Always runs on login node. Automatically detects files vs directories.
-
-## SLURM Options
-
-Override `.rex.toml` settings from command line:
-
-```bash
-rex sherlock --mem 32G script.py              # memory allocation
-rex sherlock --time 4:00:00 script.py         # time limit
-rex sherlock --cpus 8 script.py               # CPUs per task
-rex sherlock --gres gpu:2 script.py           # GPU resources
-rex sherlock --partition rhiju script.py      # specific partition
-rex sherlock --constraint a100 script.py      # node constraint (hard)
-rex sherlock --prefer fast script.py          # node preference (soft)
-```
-
-## New Project Setup
-
-```bash
-cd /path/to/project              # must have .rex.toml and pyproject.toml
-rex sherlock --sync              # rsync code to code_dir
-rex sherlock --build             # create venv, pip install -e .
-rex sherlock --watch --last      # wait for build to complete
-rex sherlock -d --gpu script.py  # run with GPU partition
-```
-
-## Venv Management
-
-- **Location**: `code_dir/.venv`
-- **Creation**: `rex sherlock --build` (returns job ID, trackable with `--log`, `--watch`)
-- **Rebuild**: `rex sherlock --build --clean` (deletes venv first)
-- **Install mode**: Editable (`-e .`), so `--sync` updates code without reinstall
-- **Check logs**: `rex sherlock --log build-xxx` (or `--log --last` right after build)
-
-## Workflow for Long Jobs
-
-1. `rex sherlock --sync` - sync latest code
-2. `rex sherlock -d --gpu script.py` - launch detached on GPU
-3. `rex sherlock --watch --last` - wait for completion
-4. `rex sherlock --pull ~/output ./output` - fetch results
-
-## SSH Connections
-
-Use `rex sherlock --connection` to check for active connections. If none exist, prompt the user to run `rex sherlock --connect` rather than connecting yourself.
-
-## Checking GPU Availability
-
-Before submitting GPU jobs, check partition-specific GPU availability:
-
-```bash
-rex sherlock -s --gpu --gpu-info    # check GPUs in GPU partition (from project config)
-```
+- Check `rex sherlock --connection` before running. If no connection, prompt the user to run `rex sherlock --connect`.
+- Check GPU availability with `rex sherlock -s --gpu --gpu-info` before submitting GPU jobs.
 <!-- rex:end -->
