@@ -20,6 +20,7 @@ class ResolvedConfig:
     # Composed configs
     execution: ExecutionContext | None = None
     slurm: SlurmOptions | None = None  # None when not using SLURM
+    sync_excludes: list[str] | None = None
 
     def __post_init__(self):
         if self.execution is None:

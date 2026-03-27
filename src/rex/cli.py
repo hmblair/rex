@@ -355,11 +355,19 @@ def resolve_config(
         prefer=prefer,
     )
 
+    # Resolve sync_excludes: project > host
+    sync_excludes = None
+    if project and project.sync_excludes is not None:
+        sync_excludes = project.sync_excludes
+    elif host_config and host_config.sync_excludes is not None:
+        sync_excludes = host_config.sync_excludes
+
     return ResolvedConfig(
         name=project.name if project else None,
         root=project.root if project else None,
         execution=execution,
         slurm=slurm,
+        sync_excludes=sync_excludes,
     )
 
 

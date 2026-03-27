@@ -11,7 +11,7 @@ from rex.ssh.executor import SSHExecutor
 from rex.utils import map_to_remote, shell_quote
 
 # Default rsync exclusions for Python projects
-PYTHON_EXCLUDES = [
+DEFAULT_SYNC_EXCLUDES = [
     "__pycache__",
     "*.pyc",
     "*.pyo",
@@ -28,6 +28,9 @@ PYTHON_EXCLUDES = [
     ".venv",
     "venv",
 ]
+
+# Backwards compatibility alias
+PYTHON_EXCLUDES = DEFAULT_SYNC_EXCLUDES
 
 
 class FileTransfer:
@@ -164,7 +167,7 @@ class FileTransfer:
 
         # Build rsync args
         if excludes is None:
-            excludes = PYTHON_EXCLUDES
+            excludes = DEFAULT_SYNC_EXCLUDES
 
         args = ["rsync", "-avz"] + self._rsync_ssh_arg()
         if delete:

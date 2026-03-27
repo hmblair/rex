@@ -27,6 +27,7 @@ KNOWN_HOST_FIELDS = {
     "default_gpu",
     "default_slurm",
     "env",
+    "sync_excludes",
 }
 
 
@@ -48,6 +49,7 @@ class HostConfig:
     default_gpu: bool = False
     default_slurm: bool = False
     env: dict[str, str] = field(default_factory=dict)
+    sync_excludes: list[str] | None = None
 
 
 @dataclass
@@ -118,6 +120,7 @@ class GlobalConfig:
                 default_gpu=host_data.get("default_gpu", False),
                 default_slurm=host_data.get("default_slurm", False),
                 env=host_data.get("env", {}),
+                sync_excludes=host_data.get("sync_excludes"),
             )
 
         return cls(aliases=aliases, hosts=hosts)

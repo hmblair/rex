@@ -25,6 +25,7 @@ KNOWN_FIELDS = {
     "prefer",
     "default_gpu",
     "env",
+    "sync_excludes",
 }
 
 
@@ -47,6 +48,7 @@ class ProjectConfig:
     prefer: str | None = None
     default_gpu: bool | None = None
     env: dict[str, str] = field(default_factory=dict)
+    sync_excludes: list[str] | None = None
 
     @classmethod
     def find_and_load(cls, start_dir: Path | None = None) -> "ProjectConfig | None":
@@ -110,4 +112,5 @@ class ProjectConfig:
             prefer=data.get("prefer"),
             default_gpu=data.get("default_gpu"),
             env=data.get("env", {}),
+            sync_excludes=data.get("sync_excludes"),
         )

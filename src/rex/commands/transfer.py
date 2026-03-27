@@ -66,7 +66,7 @@ def sync(
 
     # Sync
     try:
-        transfer.sync(local_path, remote_path)
+        transfer.sync(local_path, remote_path, excludes=config.sync_excludes)
     except TransferError as e:
         error(e.message, exit_now=False)
         return e.exit_code

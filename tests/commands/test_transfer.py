@@ -43,7 +43,7 @@ class TestSyncWithResolvedConfig:
 
         sync(mock_transfer, mock_ssh, config, local_path=tmp_path)
 
-        mock_transfer.sync.assert_called_once_with(tmp_path, "/remote/project")
+        mock_transfer.sync.assert_called_once_with(tmp_path, "/remote/project", excludes=None)
 
     def test_sync_uses_config_root_as_default_local(self, tmp_path, mocker):
         """Sync uses config.root when local_path not specified."""
@@ -56,7 +56,7 @@ class TestSyncWithResolvedConfig:
 
         sync(mock_transfer, mock_ssh, config, local_path=None)
 
-        mock_transfer.sync.assert_called_once_with(tmp_path, "/remote/project")
+        mock_transfer.sync.assert_called_once_with(tmp_path, "/remote/project", excludes=None)
 
     def test_sync_falls_back_to_cwd(self, mocker):
         """Sync uses cwd when config.root is None and local_path not specified."""
@@ -88,7 +88,7 @@ class TestSyncWithResolvedConfig:
 
         sync(mock_transfer, mock_ssh, config, local_path=other_path)
 
-        mock_transfer.sync.assert_called_once_with(other_path, "/remote/project")
+        mock_transfer.sync.assert_called_once_with(other_path, "/remote/project", excludes=None)
 
     def test_sync_with_none_code_dir(self, tmp_path, mocker):
         """Sync passes None remote_path when code_dir is None."""
@@ -102,7 +102,7 @@ class TestSyncWithResolvedConfig:
 
         sync(mock_transfer, mock_ssh, config, local_path=tmp_path, no_install=True)
 
-        mock_transfer.sync.assert_called_once_with(tmp_path, None)
+        mock_transfer.sync.assert_called_once_with(tmp_path, None, excludes=None)
 
     def test_sync_pip_install_uses_config_python(self, tmp_path, mocker):
         """Pip install uses python from config.execution.python."""
