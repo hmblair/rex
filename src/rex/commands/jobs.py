@@ -6,7 +6,7 @@ import json
 import subprocess
 from typing import TYPE_CHECKING, Any
 
-from rex.execution.base import Executor, JobResult, JobStatus
+from rex.execution.base import Executor, JobResult, JobStatus, log_path as _log_path, rex_dir
 from rex.output import colorize_status, error, info, success, warn
 from rex.ssh.executor import SSHExecutor
 
@@ -158,23 +158,18 @@ def get_status(
 
 
 def show_log(
-    ssh: SSHExecutor, target: str, job_id: str, follow: bool = False
+    ssh: SSHExecutor, target: str, job_id: str, follow: bool = False,
+    run_dir: str | None = None,
 ) -> int:
     """Show job output log."""
-    # Find log path
-    cmd = (
-        f'log=$(if [ -f ~/.rex/rex-{job_id}.log ]; then echo ~/.rex/rex-{job_id}.log; '
-        f'elif [ -f /tmp/rex-{job_id}.log ]; then echo /tmp/rex-{job_id}.log; fi); '
-        f'[ -n "$log" ] || {{ echo "Log not found" >&2; exit 1; }}'
-    )
+    log = _log_path(job_id, run_dir=run_dir)
+    cmd = f'[ -f {log} ] || {{ echo "Log not found" >&2; exit 1; }}'
 
     if follow:
-        # Get PID if job is running - tail --pid exits when process dies
-        # Uses [.] character class so pgrep doesn't match itself
         cmd += f'; pid=$(pgrep -f "rex-{job_id}[.]py" 2>/dev/null | head -1)'
-        cmd += '; if [ -n "$pid" ]; then tail -f --pid=$pid "$log"; else cat "$log"; fi'
+        cmd += f'; if [ -n "$pid" ]; then tail -f --pid=$pid {log}; else cat {log}; fi'
     else:
-        cmd += '; cat "$log"'
+        cmd += f'; cat {log}'
 
     return ssh.exec_streaming(cmd, tty=follow)
 
@@ -236,10 +231,11 @@ def watch_jobs(
     return max(r.exit_code for r in results.values())
 
 
-def get_last_job(ssh: SSHExecutor, target: str) -> str | None:
+def get_last_job(ssh: SSHExecutor, target: str, run_dir: str | None = None) -> str | None:
     """Get most recent job ID from remote."""
+    d = rex_dir(run_dir)
     code, stdout, _ = ssh.exec(
-        "ls -t ~/.rex/rex-*.log /tmp/rex-*.log 2>/dev/null | head -1 | "
+        f"ls -t {d}/rex-*.log 2>/dev/null | head -1 | "
         "sed 's|.*/rex-||; s|\\.log$||'"
     )
     return stdout.strip() if stdout.strip() else None

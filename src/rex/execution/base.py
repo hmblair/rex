@@ -24,6 +24,21 @@ class ExecutionContext:
             self.env = {}
 
 
+def rex_dir(run_dir: str | None = None) -> str:
+    """Return the remote .rex directory for scripts and logs.
+
+    Uses run_dir/.rex if run_dir is set, otherwise ~/.rex.
+    """
+    if run_dir:
+        return f"{run_dir}/.rex"
+    return "~/.rex"
+
+
+def log_path(job_id: str, run_dir: str | None = None) -> str:
+    """Return the log file path for a given job ID."""
+    return f"{rex_dir(run_dir)}/rex-{job_id}.log"
+
+
 @dataclass
 class JobInfo:
     """Returned after launching a detached job."""

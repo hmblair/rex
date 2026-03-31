@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from rex.exceptions import SSHError
-from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
+from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus, rex_dir
 from rex.execution.script import SbatchBuilder, ScriptBuilder, build_context_commands, get_log_path as _get_log_path
 from rex.output import debug, error, success, warn
 from rex.ssh.executor import SSHExecutor
@@ -95,15 +95,6 @@ class SlurmExecutor:
         for key, value in self._get_options():
             builder.sbatch_option(key, value)
 
-    def _script_dir(self, ctx: ExecutionContext) -> str:
-        """Return the remote directory for staging scripts and logs.
-
-        Uses run_dir/.rex if run_dir is set, otherwise $HOME/.rex.
-        """
-        if ctx.run_dir:
-            return f"{ctx.run_dir}/.rex"
-        code, stdout, _ = self.ssh.exec("echo $HOME")
-        return f"{stdout.strip()}/.rex"
 
     def run_foreground(
         self, ctx: ExecutionContext, script_path: Path, args: list[str]
@@ -111,7 +102,7 @@ class SlurmExecutor:
         """Run Python script via srun with streaming output."""
         debug(f"[slurm] run_foreground: {script_path}")
         script_id = generate_script_id()
-        remote_dir = self._script_dir(ctx)
+        remote_dir = rex_dir(ctx.run_dir)
         remote_py = f"{remote_dir}/rex-run-{script_id}.py"
         remote_sh = f"{remote_dir}/rex-run-{script_id}.sh"
 
@@ -151,7 +142,7 @@ class SlurmExecutor:
         """Run Python script via sbatch."""
         debug(f"[slurm] run_detached: {script_path} as {job_name}")
 
-        remote_dir = self._script_dir(ctx)
+        remote_dir = rex_dir(ctx.run_dir)
         remote_script = f"{remote_dir}/rex-{job_name}.py"
         remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
         remote_log = f"{remote_dir}/rex-{job_name}.log"
@@ -238,7 +229,7 @@ class SlurmExecutor:
 
         debug(f"[slurm] exec_foreground: {cmd[:80]}{'...' if len(cmd) > 80 else ''}")
         script_id = generate_script_id()
-        remote_dir = self._script_dir(ctx)
+        remote_dir = rex_dir(ctx.run_dir)
         remote_script = f"{remote_dir}/rex-exec-{script_id}.sh"
         remote_cmd = f"{remote_dir}/rex-exec-{script_id}.cmd"
 
@@ -275,7 +266,7 @@ REXCMD"""
         """Execute shell command via sbatch."""
         debug(f"[slurm] exec_detached: {cmd[:80]}{'...' if len(cmd) > 80 else ''} as {job_name}")
 
-        remote_dir = self._script_dir(ctx)
+        remote_dir = rex_dir(ctx.run_dir)
         remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
         remote_log = f"{remote_dir}/rex-{job_name}.log"
 

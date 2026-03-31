@@ -582,7 +582,7 @@ def _main(argv: list[str] | None = None) -> int:
 
         job_id = args.status
         if args.last or job_id == "--last":
-            job_id = get_last_job(ssh, target)
+            job_id = get_last_job(ssh, target, ctx.run_dir)
             if not job_id:
                 raise ValidationError("No jobs found")
         return get_status(executor, job_id, args.json)
@@ -592,17 +592,17 @@ def _main(argv: list[str] | None = None) -> int:
 
         job_id = args.log
         if args.last or job_id == "--last":
-            job_id = get_last_job(ssh, target)
+            job_id = get_last_job(ssh, target, ctx.run_dir)
             if not job_id:
                 raise ValidationError("No jobs found")
-        return show_log(ssh, target, job_id, args.follow)
+        return show_log(ssh, target, job_id, args.follow, ctx.run_dir)
 
     if args.kill:
         from rex.commands.jobs import get_last_job, kill_job
 
         job_id = args.kill
         if args.last or job_id == "--last":
-            job_id = get_last_job(ssh, target)
+            job_id = get_last_job(ssh, target, ctx.run_dir)
             if not job_id:
                 raise ValidationError("No jobs found")
         return kill_job(executor, job_id)
@@ -612,7 +612,7 @@ def _main(argv: list[str] | None = None) -> int:
 
         job_ids = args.watch
         if not job_ids or args.last:
-            job_id = get_last_job(ssh, target)
+            job_id = get_last_job(ssh, target, ctx.run_dir)
             if not job_id:
                 raise ValidationError("No jobs found")
             job_ids = [job_id]
