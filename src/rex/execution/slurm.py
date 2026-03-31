@@ -407,16 +407,43 @@ REXCMD"""
 
         return jobs
 
-    def get_status(self, job_id: str) -> JobStatus:
-        """Get status of specific SLURM job."""
+    def _query_job_state(self, job_id: str) -> str:
+        """Query SLURM for a job's current state.
+
+        Checks squeue first (active jobs), then falls back to sacct
+        (finished jobs). Returns a lowercase state string, or "completed"
+        if neither source has information.
+        """
         code, stdout, _ = self.ssh.exec(
             f"squeue -u $USER -n rex-{job_id} -h -o %T 2>/dev/null"
         )
+        if code != 0:
+            raise SSHError("squeue query failed")
 
         state = stdout.strip()
         if state:
-            return JobStatus(job_id=job_id, status=state.lower())
-        return JobStatus(job_id=job_id, status="completed")
+            return state.lower()
+
+        # Job not in squeue — check sacct for final status
+        code, stdout, _ = self.ssh.exec(
+            f"sacct -n -X --name=rex-{job_id} --format=State 2>/dev/null | head -1 | tr -d ' '"
+        )
+        sacct_status = stdout.strip().upper()
+        if sacct_status in (
+            "FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL", "OUT_OF_MEMORY",
+            "COMPLETED", "PENDING", "RUNNING", "REQUEUED",
+        ):
+            return sacct_status.lower()
+
+        return "completed"
+
+    def get_status(self, job_id: str) -> JobStatus:
+        """Get status of specific SLURM job."""
+        try:
+            state = self._query_job_state(job_id)
+        except SSHError:
+            return JobStatus(job_id=job_id, status="unknown")
+        return JobStatus(job_id=job_id, status=state)
 
     def get_log_path(self, job_id: str) -> str | None:
         """Get log file path."""
@@ -437,11 +464,9 @@ REXCMD"""
         failures = 0
 
         while True:
-            code, stdout, _ = self.ssh.exec(
-                f"squeue -u $USER -n rex-{job_id} -h -o %T 2>/dev/null"
-            )
-
-            if code != 0:
+            try:
+                state = self._query_job_state(job_id)
+            except SSHError:
                 failures += 1
                 if failures >= max_failures:
                     warn(f"Lost connection after {max_failures} attempts")
@@ -451,23 +476,14 @@ REXCMD"""
                 continue
 
             failures = 0
-            state = stdout.strip()
 
-            if not state:
-                # Job no longer in queue - check sacct for final status
-                code, stdout, _ = self.ssh.exec(
-                    f"sacct -n -X --name=rex-{job_id} --format=State 2>/dev/null | head -1 | tr -d ' '"
-                )
-                sacct_status = stdout.strip()
+            if state in ("running", "pending", "requeued"):
+                time.sleep(poll_interval)
+                continue
 
-                if sacct_status == "COMPLETED":
-                    success(f"Job {job_id} completed")
-                    return JobResult(job_id=job_id, status="completed", exit_code=0)
-                elif sacct_status in ("FAILED", "CANCELLED", "TIMEOUT", "NODE_FAIL"):
-                    warn(f"Job {job_id} finished: {sacct_status.lower()}")
-                    return JobResult(job_id=job_id, status="failed", exit_code=1)
-                else:
-                    success(f"Job {job_id} completed")
-                    return JobResult(job_id=job_id, status="completed", exit_code=0)
+            if state == "completed":
+                success(f"Job {job_id} completed")
+                return JobResult(job_id=job_id, status="completed", exit_code=0)
 
-            time.sleep(poll_interval)
+            warn(f"Job {job_id} finished: {state}")
+            return JobResult(job_id=job_id, status=state, exit_code=1)
