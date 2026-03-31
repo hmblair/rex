@@ -53,7 +53,7 @@ class SlurmOptions:
 class SlurmExecutor:
     """SLURM-based execution (srun/sbatch).
 
-    Uses ~/.rex directory for logs/scripts (shared filesystem).
+    Stages scripts and logs in run_dir/.rex (or $HOME/.rex if no run_dir).
     Uses squeue/scancel for job management.
     """
 
@@ -95,21 +95,31 @@ class SlurmExecutor:
         for key, value in self._get_options():
             builder.sbatch_option(key, value)
 
+    def _script_dir(self, ctx: ExecutionContext) -> str:
+        """Return the remote directory for staging scripts and logs.
+
+        Uses run_dir/.rex if run_dir is set, otherwise $HOME/.rex.
+        """
+        if ctx.run_dir:
+            return f"{ctx.run_dir}/.rex"
+        code, stdout, _ = self.ssh.exec("echo $HOME")
+        return f"{stdout.strip()}/.rex"
+
     def run_foreground(
         self, ctx: ExecutionContext, script_path: Path, args: list[str]
     ) -> int:
         """Run Python script via srun with streaming output."""
         debug(f"[slurm] run_foreground: {script_path}")
         script_id = generate_script_id()
-        script_dir = ctx.run_dir or "$HOME/.rex"
-        remote_py = f"{script_dir}/rex-run-{script_id}.py"
-        remote_sh = f"{script_dir}/rex-run-{script_id}.sh"
+        remote_dir = self._script_dir(ctx)
+        remote_py = f"{remote_dir}/rex-run-{script_id}.py"
+        remote_sh = f"{remote_dir}/rex-run-{script_id}.sh"
 
         # Copy Python script to remote
         with open(script_path) as f:
             script_content = f.read()
 
-        self.ssh.exec(f"mkdir -p {script_dir}")
+        self.ssh.exec(f"mkdir -p {remote_dir}")
         _ssh_write(self.ssh, script_content, remote_py)
 
         # Build wrapper script
@@ -141,19 +151,13 @@ class SlurmExecutor:
         """Run Python script via sbatch."""
         debug(f"[slurm] run_detached: {script_path} as {job_name}")
 
-        # Get remote home for absolute paths
-        code, stdout, _ = self.ssh.exec("echo $HOME")
-        remote_home = stdout.strip()
-        if not remote_home:
-            warn("Failed to get remote home directory")
-            return JobInfo(job_id=job_name, log_path="", is_slurm=True, slurm_id=None)
-        remote_dir = f"{remote_home}/.rex"
+        remote_dir = self._script_dir(ctx)
         remote_script = f"{remote_dir}/rex-{job_name}.py"
         remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
         remote_log = f"{remote_dir}/rex-{job_name}.log"
 
         # Create directory and copy script
-        self.ssh.exec("mkdir -p ~/.rex")
+        self.ssh.exec(f"mkdir -p {remote_dir}")
         with open(script_path) as f:
             script_content = f.read()
         _ssh_write(self.ssh, script_content, remote_script)
@@ -234,9 +238,9 @@ class SlurmExecutor:
 
         debug(f"[slurm] exec_foreground: {cmd[:80]}{'...' if len(cmd) > 80 else ''}")
         script_id = generate_script_id()
-        script_dir = ctx.run_dir or "$HOME/.rex"
-        remote_script = f"{script_dir}/rex-exec-{script_id}.sh"
-        remote_cmd = f"{script_dir}/rex-exec-{script_id}.cmd"
+        remote_dir = self._script_dir(ctx)
+        remote_script = f"{remote_dir}/rex-exec-{script_id}.sh"
+        remote_cmd = f"{remote_dir}/rex-exec-{script_id}.cmd"
 
         # Build setup prefix
         context_cmds = build_context_commands(ctx)
@@ -244,7 +248,7 @@ class SlurmExecutor:
         script_content = "\n".join(prefix_lines) + "\n"
 
         # Write command to separate file using heredoc (preserves all quoting)
-        self.ssh.exec(f"mkdir -p {script_dir}")
+        self.ssh.exec(f"mkdir -p {remote_dir}")
         write_cmd = f"""cat > {remote_cmd} << 'REXCMD'
 {cmd}
 REXCMD"""
@@ -271,17 +275,11 @@ REXCMD"""
         """Execute shell command via sbatch."""
         debug(f"[slurm] exec_detached: {cmd[:80]}{'...' if len(cmd) > 80 else ''} as {job_name}")
 
-        # Get remote home
-        code, stdout, _ = self.ssh.exec("echo $HOME")
-        remote_home = stdout.strip()
-        if not remote_home:
-            warn("Failed to get remote home directory")
-            return JobInfo(job_id=job_name, log_path="", is_slurm=True, slurm_id=None)
-        remote_dir = f"{remote_home}/.rex"
+        remote_dir = self._script_dir(ctx)
         remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
         remote_log = f"{remote_dir}/rex-{job_name}.log"
 
-        self.ssh.exec("mkdir -p ~/.rex")
+        self.ssh.exec(f"mkdir -p {remote_dir}")
 
         # Build sbatch script
         builder = SbatchBuilder().shebang(login=True)
