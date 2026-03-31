@@ -466,7 +466,7 @@ REXCMD"""
 
             failures = 0
 
-            if state in ("running", "pending", "requeued"):
+            if state in ("running", "pending", "requeued", "configuring"):
                 time.sleep(poll_interval)
                 continue
 

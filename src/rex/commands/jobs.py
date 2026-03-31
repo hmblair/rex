@@ -182,53 +182,20 @@ def kill_job(executor: Executor, job_id: str) -> int:
 
 
 def watch_jobs(
-    executor: Executor, job_ids: list[str], json_output: bool = False, poll_interval: int = 5
+    executor: Executor, job_ids: list[str], json_output: bool = False
 ) -> int:
-    """Wait for one or more jobs to complete.
+    """Wait for one or more jobs to complete."""
+    info(f"Watching {'job' if len(job_ids) == 1 else f'{len(job_ids)} jobs'}: {', '.join(job_ids)}")
 
-    Polls all jobs in parallel and reports each as it completes.
-    """
-    import time
-
-    if len(job_ids) == 1:
-        info(f"Watching job {job_ids[0]}...")
-        result = executor.watch_job(job_ids[0])
-        if json_output:
-            print(json.dumps({
-                "job": result.job_id,
-                "status": result.status,
-                "exit_code": result.exit_code,
-            }))
-        return result.exit_code
-
-    info(f"Watching {len(job_ids)} jobs: {', '.join(job_ids)}")
-
-    pending = set(job_ids)
-    results: dict[str, JobResult] = {}
-
-    while pending:
-        for job_id in list(pending):
-            status = executor.get_status(job_id)
-            if status.status not in ("running", "pending"):
-                pending.remove(job_id)
-                exit_code = 0 if status.status == "completed" else 1
-                results[job_id] = JobResult(job_id=job_id, status=status.status, exit_code=exit_code)
-                if status.status == "completed":
-                    success(f"Job {job_id} completed")
-                else:
-                    warn(f"Job {job_id} finished: {status.status}")
-
-        if pending:
-            time.sleep(poll_interval)
+    results = [executor.watch_job(job_id) for job_id in job_ids]
 
     if json_output:
-        output = [
+        print(json.dumps([
             {"job": r.job_id, "status": r.status, "exit_code": r.exit_code}
-            for r in results.values()
-        ]
-        print(json.dumps(output))
+            for r in results
+        ]))
 
-    return max(r.exit_code for r in results.values())
+    return max(r.exit_code for r in results)
 
 
 def get_last_job(ssh: SSHExecutor, target: str, run_dir: str | None = None) -> str | None:
