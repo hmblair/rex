@@ -6,8 +6,11 @@ import subprocess
 import time
 from dataclasses import dataclass
 from rex.exceptions import SSHError
-from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus, rex_dir
-from rex.execution.script import SbatchBuilder, build_context_commands, get_log_path as _get_log_path
+from rex.execution.base import (
+    ExecutionContext, JobInfo, JobResult, JobStatus,
+    log_path as _log_path, read_job_meta, rex_dir, write_job_meta,
+)
+from rex.execution.script import SbatchBuilder, build_context_commands
 from rex.output import debug, error, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_script_id
@@ -142,7 +145,7 @@ REXCMD"""
 
         remote_dir = rex_dir(ctx.run_dir)
         remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
-        remote_log = f"{remote_dir}/rex-{job_name}.log"
+        remote_log = _log_path(job_name, ctx.run_dir)
 
         self.ssh.exec(f"mkdir -p {remote_dir}")
 
@@ -194,6 +197,10 @@ REXCMD"""
             f'echo "[rex] SLURM ID: {slurm_id}" >> {remote_log} && '
             f'echo "[rex] Status: pending" >> {remote_log} && '
             f'echo "---" >> {remote_log}'
+        )
+
+        write_job_meta(
+            self.ssh, job_name, ctx.run_dir, remote_log, slurm_id=slurm_id
         )
 
         target = self.ssh.target
@@ -310,7 +317,8 @@ REXCMD"""
 
     def get_log_path(self, job_id: str) -> str | None:
         """Get log file path."""
-        return _get_log_path(self.ssh, job_id)
+        meta = read_job_meta(self.ssh, job_id)
+        return meta.get("log") if meta else None
 
     def kill_job(self, job_id: str) -> bool:
         """Cancel SLURM job."""

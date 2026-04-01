@@ -129,9 +129,16 @@ class TestDirectExecutorExecDetached:
         ssh.exec.return_value = (0, "12345", "")
         return ssh
 
+    def _find_exec_call(self, mock_ssh, keyword: str) -> str:
+        """Find the first ssh.exec call containing the given keyword."""
+        for args, _ in mock_ssh.exec.call_args_list:
+            if keyword in args[0]:
+                return args[0]
+        raise AssertionError(f"No ssh.exec call containing '{keyword}'")
+
     def _get_script_content(self, mock_ssh) -> str:
-        """Extract the script content from the first ssh.exec call (heredoc write)."""
-        return mock_ssh.exec.call_args_list[0][0][0]
+        """Extract the script content from the heredoc write call."""
+        return self._find_exec_call(mock_ssh, "REXSCRIPT")
 
     def test_exec_detached_double_quotes(self, mock_ssh):
         """exec_detached preserves double quotes."""
@@ -208,18 +215,17 @@ class TestDirectExecutorExecDetached:
         assert "done" in script
 
     def test_exec_detached_writes_script_file(self, mock_ssh):
-        """exec_detached writes command to .sh file for job tracking."""
+        """exec_detached writes command to .sh file in rex_dir."""
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
         executor.exec_detached(ctx, "echo hello", job_name="test-job")
 
-        # First call writes the script
-        write_cmd = mock_ssh.exec.call_args_list[0][0][0]
-        assert "/tmp/rex-test-job.sh" in write_cmd
-        assert "#!/bin/bash -l" in write_cmd
+        # Find the heredoc write call
+        script_content = self._get_script_content(mock_ssh)
+        assert "~/.rex/rex-test-job.sh" in script_content
+        assert "#!/bin/bash -l" in script_content
 
-        # Second call runs it via nohup
-        run_cmd = mock_ssh.exec.call_args_list[1][0][0]
-        assert "nohup" in run_cmd
-        assert "/tmp/rex-test-job.sh" in run_cmd
+        # Find the nohup call
+        nohup_cmd = self._find_exec_call(mock_ssh, "nohup")
+        assert "~/.rex/rex-test-job.sh" in nohup_cmd

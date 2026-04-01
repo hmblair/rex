@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from rex.ssh.executor import SSHExecutor
 
 
 @dataclass
@@ -32,9 +36,68 @@ def rex_dir(run_dir: str | None = None) -> str:
     return "~/.rex"
 
 
-def log_path(job_id: str, run_dir: str | None = None) -> str:
-    """Return the log file path for a given job ID."""
-    return f"{rex_dir(run_dir)}/rex-{job_id}.log"
+def log_path(job_name: str, run_dir: str | None = None) -> str:
+    """Return the log file path for a given job name."""
+    return f"{rex_dir(run_dir)}/rex-{job_name}.log"
+
+
+def job_meta_dir(run_dir: str | None = None) -> str:
+    """Return the directory for job metadata files."""
+    return f"{rex_dir(run_dir)}/jobs"
+
+
+def job_meta_path(job_name: str, run_dir: str | None = None) -> str:
+    """Return the metadata file path for a given job name."""
+    return f"{job_meta_dir(run_dir)}/{job_name}.json"
+
+
+def write_job_meta(
+    ssh: "SSHExecutor",
+    job_name: str,
+    run_dir: str | None,
+    log: str,
+    *,
+    pid: int | None = None,
+    slurm_id: int | None = None,
+) -> None:
+    """Write job metadata to the remote."""
+    meta: dict[str, Any] = {"log": log}
+    if pid is not None:
+        meta["pid"] = pid
+    if slurm_id is not None:
+        meta["slurm_id"] = slurm_id
+
+    meta_dir = job_meta_dir(run_dir)
+    path = job_meta_path(job_name, run_dir)
+    payload = json.dumps(meta)
+    ssh.exec(f"mkdir -p {meta_dir} && echo '{payload}' > {path}")
+
+
+def read_job_meta(
+    ssh: "SSHExecutor", job_name: str, run_dir: str | None = None
+) -> dict[str, Any] | None:
+    """Read job metadata from the remote. Returns None if not found."""
+    path = job_meta_path(job_name, run_dir)
+    code, stdout, _ = ssh.exec(f"cat {path} 2>/dev/null")
+    if code != 0 or not stdout.strip():
+        return None
+    try:
+        return json.loads(stdout.strip())
+    except json.JSONDecodeError:
+        return None
+
+
+def list_job_meta_names(
+    ssh: "SSHExecutor", run_dir: str | None = None
+) -> list[str]:
+    """List all job names that have metadata files."""
+    meta_d = job_meta_dir(run_dir)
+    code, stdout, _ = ssh.exec(
+        f"ls -t {meta_d}/*.json 2>/dev/null | sed 's|.*/||; s|\\.json$||'"
+    )
+    if code != 0 or not stdout.strip():
+        return []
+    return [name for name in stdout.strip().split("\n") if name]
 
 
 @dataclass

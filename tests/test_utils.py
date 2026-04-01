@@ -12,7 +12,6 @@ from rex.utils import (
     validate_gres,
     validate_cpus,
     map_to_remote,
-    job_pattern,
     generate_job_name,
     generate_script_id,
     shell_quote,
@@ -271,20 +270,6 @@ class TestMapToRemote:
         local = Path("/Users/user/a/b/c/d")
         result = map_to_remote(local, "/remote/home")
         assert result == "/remote/home/a/b/c/d"
-
-
-class TestJobPattern:
-    """Tests for job_pattern function."""
-
-    def test_basic_pattern(self):
-        """job_pattern returns correct pgrep pattern."""
-        result = job_pattern("myexp")
-        assert result == "rex-myexp[.](py|sh)"
-
-    def test_pattern_with_special_chars(self):
-        """Pattern handles job IDs with dashes/underscores."""
-        result = job_pattern("exp-1_run")
-        assert result == "rex-exp-1_run[.](py|sh)"
 
 
 class TestGenerateJobName:

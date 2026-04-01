@@ -4,51 +4,42 @@ from __future__ import annotations
 
 import time
 
-from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
-from rex.execution.script import build_context_commands, get_log_path as _get_log_path
+from rex.execution.base import (
+    ExecutionContext, JobInfo, JobResult, JobStatus,
+    log_path as _log_path, read_job_meta, rex_dir, write_job_meta,
+)
+from rex.execution.script import build_context_commands
 from rex.output import success, warn
 from rex.ssh.executor import SSHExecutor
-from rex.utils import generate_script_id, job_pattern, shell_quote
+from rex.utils import generate_script_id
 
 
 def _run_detached_nohup(
     ssh: SSHExecutor,
     bash_cmd: str,
-    log_path: str,
+    remote_log: str,
     job_name: str,
-    *,
-    login_shell: bool = False,
-    show_status: bool = False,
+    run_dir: str | None,
 ) -> JobInfo:
-    """Run command detached via nohup and return JobInfo.
-
-    Args:
-        ssh: SSH executor.
-        bash_cmd: Command to run (will be passed to bash -c).
-        log_path: Remote path for output log.
-        job_name: Job identifier.
-        login_shell: Use bash -l (login shell).
-        show_status: Print status command hint.
-    """
-    shell_flag = "-l -c" if login_shell else "-c"
+    """Run command detached via nohup and return JobInfo."""
     nohup_cmd = (
-        f"nohup bash {shell_flag} '{bash_cmd}' > {log_path} 2>&1 & "
+        f"nohup bash -c '{bash_cmd}' > {remote_log} 2>&1 & "
         f"pid=$!; disown $pid 2>/dev/null; sleep 0.5; echo $pid"
     )
 
     _, stdout, _ = ssh.exec(nohup_cmd)
     pid = int(stdout.strip()) if stdout.strip() else None
 
+    write_job_meta(ssh, job_name, run_dir, remote_log, pid=pid)
+
     target = ssh.target
     success(f"Detached: {job_name} (PID {pid})")
-    if show_status:
-        print(f"Status: rex {target} --status {job_name}")
     print(f"Log:    rex {target} --log {job_name}")
     print(f"Kill:   rex {target} --kill {job_name}")
 
     return JobInfo(
         job_id=job_name,
-        log_path=log_path,
+        log_path=remote_log,
         is_slurm=False,
         pid=pid,
     )
@@ -104,8 +95,11 @@ chmod +x {remote_cmd}"""
         self, ctx: ExecutionContext, cmd: str, job_name: str
     ) -> JobInfo:
         """Execute shell command detached."""
-        remote_script = f"/tmp/rex-{job_name}.sh"
-        remote_log = f"/tmp/rex-{job_name}.log"
+        remote_dir = rex_dir(ctx.run_dir)
+        remote_script = f"{remote_dir}/rex-{job_name}.sh"
+        remote_log = _log_path(job_name, ctx.run_dir)
+
+        self.ssh.exec(f"mkdir -p {remote_dir}")
 
         # Build script content
         context_cmds = build_context_commands(ctx)
@@ -125,92 +119,68 @@ chmod +x {remote_script}"""
             raise ExecutionError(f"Failed to write script: {stderr}")
 
         return _run_detached_nohup(
-            self.ssh, remote_script, remote_log, job_name, login_shell=False
+            self.ssh, remote_script, remote_log, job_name, ctx.run_dir
         )
+
+    def _pid_from_meta(self, job_id: str) -> int | None:
+        """Read PID from job metadata."""
+        meta = read_job_meta(self.ssh, job_id)
+        return meta.get("pid") if meta else None
 
     def list_jobs(self, since_minutes: int = 0) -> list[JobStatus]:
         """List all rex jobs on remote."""
-        # Note: since_minutes not supported for direct execution (no job history)
-        script = '''
-for log in /tmp/rex-*.log ~/.rex/rex-*.log; do
-    [ -f "$log" ] || continue
-    job=$(basename "$log" .log | sed "s/rex-//")
-    pattern="rex-${job}[.](py|sh)"
-    pid=$(pgrep -f "$pattern" 2>/dev/null | head -1)
-    if [ -n "$pid" ]; then
-        status="running"
-    else
-        status="completed"
-        pid="-"
-    fi
-    # Get first line of script as description (check both .py and .sh)
-    desc=""
-    for ext in py sh; do
-        script_tmp="/tmp/rex-${job}.${ext}"
-        if [ -f "$script_tmp" ]; then
-            desc=$(head -1 "$script_tmp" | sed "s/^#[[:space:]]*//" | cut -c1-40)
-            break
-        fi
-    done
-    printf "%s\\t%s\\t%s\\t%s\\n" "$job" "$status" "$pid" "$desc"
-done
-'''
-        code, stdout, _ = self.ssh.exec(f"bash -c {shell_quote(script)}")
+        from rex.execution.base import list_job_meta_names
 
+        names = list_job_meta_names(self.ssh)
         jobs = []
-        for line in stdout.strip().split("\n"):
-            if not line:
+        for name in names:
+            meta = read_job_meta(self.ssh, name)
+            if not meta:
                 continue
-            parts = line.split("\t")
-            if len(parts) >= 3:
-                job_id, status, pid_str = parts[0], parts[1], parts[2]
-                desc = parts[3] if len(parts) > 3 else None
-                pid = int(pid_str) if pid_str != "-" else None
-                jobs.append(JobStatus(
-                    job_id=job_id,
-                    status=status,
-                    pid=pid,
-                    description=desc,
-                    hostname=self.ssh.target,
-                ))
+            pid = meta.get("pid")
+            if pid:
+                code, _, _ = self.ssh.exec(f"kill -0 {pid} 2>/dev/null")
+                status = "running" if code == 0 else "completed"
+            else:
+                status = "completed"
+            jobs.append(JobStatus(
+                job_id=name,
+                status=status,
+                pid=pid if status == "running" else None,
+                hostname=self.ssh.target,
+            ))
         return jobs
 
     def get_status(self, job_id: str) -> JobStatus:
         """Get status of specific job."""
-        pattern = job_pattern(job_id)
-        code, stdout, _ = self.ssh.exec(f"pgrep -f '{pattern}' | head -1")
-
-        if code != 0:
+        pid = self._pid_from_meta(job_id)
+        if pid is None:
             return JobStatus(job_id=job_id, status="unknown")
 
-        pid = int(stdout.strip()) if stdout.strip() else None
-        status = "running" if pid else "completed"
-        return JobStatus(job_id=job_id, status=status, pid=pid)
+        code, _, _ = self.ssh.exec(f"kill -0 {pid} 2>/dev/null")
+        status = "running" if code == 0 else "completed"
+        return JobStatus(
+            job_id=job_id, status=status, pid=pid if status == "running" else None
+        )
 
     def get_log_path(self, job_id: str) -> str | None:
         """Get log file path for a job."""
-        return _get_log_path(self.ssh, job_id)
+        meta = read_job_meta(self.ssh, job_id)
+        return meta.get("log") if meta else None
 
     def kill_job(self, job_id: str) -> bool:
         """Kill a running job."""
-        pattern = job_pattern(job_id)
-        cmd = (
-            f"pid=$(pgrep -f '{pattern}' | head -1); "
-            f'if [ -n "$pid" ]; then kill "$pid" 2>/dev/null && echo killed || echo failed; '
-            f'else echo not_running; fi'
-        )
-        code, stdout, _ = self.ssh.exec(cmd)
-        result = stdout.strip()
+        pid = self._pid_from_meta(job_id)
+        if pid is None:
+            warn(f"Job {job_id} not found")
+            return False
 
-        if result == "killed":
+        code, _, _ = self.ssh.exec(f"kill {pid} 2>/dev/null")
+        if code == 0:
             success(f"Killed job {job_id}")
             return True
-        elif result == "not_running":
-            warn(f"Job {job_id} is not running")
-            return False
-        else:
-            warn(f"Failed to kill job {job_id}")
-            return False
+        warn(f"Failed to kill job {job_id}")
+        return False
 
     def watch_job(self, job_id: str, poll_interval: int = 5) -> JobResult:
         """Wait for job to complete."""

@@ -143,14 +143,6 @@ def map_to_remote(local_path: Path, remote_home: str) -> str:
     return path_str
 
 
-def job_pattern(job_id: str) -> str:
-    """Build pgrep pattern that won't match itself (character class trick).
-
-    Matches both Python scripts (.py) and shell scripts (.sh).
-    """
-    return f"rex-{job_id}[.](py|sh)"
-
-
 def generate_job_name() -> str:
     """Generate unique job name with timestamp and random suffix."""
     import secrets

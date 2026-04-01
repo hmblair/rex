@@ -6,7 +6,10 @@ import json
 import subprocess
 from typing import TYPE_CHECKING, Any
 
-from rex.execution.base import Executor, JobResult, JobStatus, log_path as _log_path, rex_dir
+from rex.execution.base import (
+    Executor, JobResult, JobStatus,
+    list_job_meta_names, read_job_meta,
+)
 from rex.output import colorize_status, error, info, success, warn
 from rex.ssh.executor import SSHExecutor
 
@@ -162,12 +165,20 @@ def show_log(
     run_dir: str | None = None,
 ) -> int:
     """Show job output log."""
-    log = _log_path(job_id, run_dir=run_dir)
+    meta = read_job_meta(ssh, job_id, run_dir)
+    if not meta or "log" not in meta:
+        error("Log not found", exit_now=False)
+        return 1
+
+    log = meta["log"]
     cmd = f'[ -f {log} ] || {{ echo "Log not found" >&2; exit 1; }}'
 
     if follow:
-        cmd += f'; pid=$(pgrep -f "rex-{job_id}[.]py" 2>/dev/null | head -1)'
-        cmd += f'; if [ -n "$pid" ]; then tail -f --pid=$pid {log}; else cat {log}; fi'
+        pid = meta.get("pid")
+        if pid:
+            cmd += f'; if kill -0 {pid} 2>/dev/null; then tail -f --pid={pid} {log}; else cat {log}; fi'
+        else:
+            cmd += f'; cat {log}'
     else:
         cmd += f'; cat {log}'
 
@@ -200,9 +211,5 @@ def watch_jobs(
 
 def get_last_job(ssh: SSHExecutor, target: str, run_dir: str | None = None) -> str | None:
     """Get most recent job ID from remote."""
-    d = rex_dir(run_dir)
-    code, stdout, _ = ssh.exec(
-        f"ls -t {d}/rex-*.log 2>/dev/null | head -1 | "
-        "sed 's|.*/rex-||; s|\\.log$||'"
-    )
-    return stdout.strip() if stdout.strip() else None
+    names = list_job_meta_names(ssh, run_dir)
+    return names[0] if names else None
