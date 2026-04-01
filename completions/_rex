@@ -33,9 +33,7 @@ _rex() {
         '(-V --version)'{-V,--version}'[Show version]'
         '-d[Detach: run in background]'
         '(-n --name)'{-n,--name}'[Name for detached job]:name:'
-        '-p[Python interpreter]:python path:_files'
         '*-m[Load module (repeatable)]:module:'
-        '(-s --slurm)'{-s,--slurm}'[Use SLURM for compute node execution]'
         '--gpu[Use GPU partition]'
         '--cpu[Use CPU partition (override)]'
         '--debug[Enable debug mode (verbose SSH)]'
@@ -62,8 +60,7 @@ _rex() {
 
     local -a sync_options=(
         '--sync[Sync project to remote]:path:_files -/'
-        '--no-install[Skip pip install after sync]'
-        '--build[Create/update venv on remote]'
+'--build[Create/update venv on remote]'
         '--clean[Delete venv before rebuilding]'
         '--wait[Wait for build to complete]'
     )
@@ -95,7 +92,7 @@ _rex() {
         "${transfer_options[@]}" \
         "${exec_options[@]}" \
         "${connection_options[@]}" \
-        '*:file:_files -g "*.py"'
+        '*::'
 
     case $state in
         host)

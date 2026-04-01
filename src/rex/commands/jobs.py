@@ -100,7 +100,7 @@ def list_all_jobs(
             ssh = SSHExecutor(target, verbose=False)
 
             host_config = global_config.get_host_config(alias) if alias != target else None
-            if host_config and host_config.default_slurm:
+            if host_config and host_config.slurm:
                 executor: Executor = SlurmExecutor(ssh, None)
             else:
                 executor = DirectExecutor(ssh)

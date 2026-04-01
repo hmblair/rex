@@ -12,7 +12,6 @@ def make_ctx(
 ) -> ExecutionContext:
     """Create an ExecutionContext for testing."""
     return ExecutionContext(
-        python="python3",
         modules=modules or [],
         code_dir=code_dir,
         run_dir=None,

@@ -324,7 +324,7 @@ class TestHostConfigDefaults:
         assert hc.constraint is None
         assert hc.prefer is None
         assert hc.default_gpu is False
-        assert hc.default_slurm is False
+        assert hc.slurm is False
         assert hc.env == {}
 
 

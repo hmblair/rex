@@ -100,16 +100,6 @@ class ScriptBuilder:
         self._lines.append(f"source {shlex.quote(path)}")
         return self
 
-    def run_python(
-        self, python: str, script: str, args: list[str] | None = None
-    ) -> Self:
-        """Add python execution command."""
-        cmd = f"{python} -u {shlex.quote(script)}"
-        if args:
-            cmd += " " + " ".join(shlex.quote(a) for a in args)
-        self._lines.append(cmd)
-        return self
-
     def run_command(self, cmd: str) -> Self:
         """Add arbitrary command."""
         self._lines.append(cmd)

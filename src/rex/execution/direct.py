@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import subprocess
 import time
-from pathlib import Path
 
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus
-from rex.execution.script import ScriptBuilder, build_context_commands, get_log_path as _get_log_path
+from rex.execution.script import build_context_commands, get_log_path as _get_log_path
 from rex.output import success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_script_id, job_pattern, shell_quote
@@ -65,87 +63,6 @@ class DirectExecutor:
 
     def __init__(self, ssh: SSHExecutor):
         self.ssh = ssh
-
-    def run_foreground(
-        self, ctx: ExecutionContext, script_path: Path, args: list[str]
-    ) -> int:
-        """Run Python script in foreground with streaming output."""
-        script_id = generate_script_id()
-        remote_py = f"/tmp/rex-run-{script_id}.py"
-        remote_sh = f"/tmp/rex-run-{script_id}.sh"
-
-        # Copy Python script to remote
-        with open(script_path) as f:
-            script_content = f.read()
-
-        code, _, _ = self.ssh.exec(f"cat > {remote_py}")
-        # Actually send the content via stdin
-        subprocess.run(
-            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_py}"],
-            input=script_content.encode(),
-            check=True,
-        )
-
-        # Build wrapper script
-        builder = ScriptBuilder().shebang(login=True)
-        builder.apply_context(ctx)
-        builder.run_python(ctx.python, remote_py, args)
-
-        wrapper = builder.build()
-
-        # Execute via script method
-        exit_code = self.ssh.exec_script_streaming(wrapper, tty=None)
-
-        # Cleanup
-        self.ssh.exec(f"rm -f {remote_py} {remote_sh}")
-
-        return exit_code
-
-    def run_detached(
-        self,
-        ctx: ExecutionContext,
-        script_path: Path,
-        args: list[str],
-        job_name: str,
-    ) -> JobInfo:
-        """Run Python script detached in background."""
-        remote_script = f"/tmp/rex-{job_name}.py"
-        remote_log = f"/tmp/rex-{job_name}.log"
-
-        # Copy script via SSH control socket (bare scp doesn't reuse it)
-        with open(script_path) as f:
-            script_content = f.read()
-        result = subprocess.run(
-            ["ssh", *self.ssh._opts, self.ssh.target, f"cat > {remote_script}"],
-            input=script_content.encode(),
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            from rex.exceptions import ExecutionError
-            stderr = result.stderr.decode().strip()
-            raise ExecutionError(
-                f"Failed to copy script to remote: {stderr or 'unknown error'}"
-            )
-
-        # Build command
-        context_cmds = build_context_commands(ctx)
-        env_prefix = "; ".join(context_cmds) + "; " if context_cmds else ""
-
-        args_str = " ".join(f"'{a}'" for a in args) if args else ""
-        python_cmd = f"{ctx.python} -u {remote_script}"
-        if args_str:
-            python_cmd += f" {args_str}"
-
-        # Wrapper with exit code reporting
-        wrapper = (
-            f"{{ {env_prefix}{python_cmd}; code=$?; "
-            f'if [ $code -gt 128 ]; then echo "[rex] Killed by signal $((code-128))" >&2; '
-            f'elif [ $code -ne 0 ]; then echo "[rex] Exit code: $code" >&2; fi; }}'
-        )
-
-        return _run_detached_nohup(
-            self.ssh, wrapper, remote_log, job_name, show_status=True
-        )
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command in foreground."""

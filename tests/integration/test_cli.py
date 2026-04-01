@@ -36,12 +36,6 @@ class TestBuildParser:
         args = parser.parse_args(["user@host"])
         assert args.target == "user@host"
 
-    def test_slurm_flag(self):
-        """-s/--slurm flag is parsed."""
-        parser = build_parser()
-        args = parser.parse_args(["user@host", "-s"])
-        assert args.slurm is True
-
     def test_detach_flag(self):
         """-d/--detach flag is parsed."""
         parser = build_parser()
@@ -53,12 +47,6 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["user@host", "-n", "myexp"])
         assert args.name == "myexp"
-
-    def test_python_option(self):
-        """-p/--python option is parsed."""
-        parser = build_parser()
-        args = parser.parse_args(["user@host", "-p", "/opt/python3"])
-        assert args.python == "/opt/python3"
 
     def test_modules_option(self):
         """-m/--module option accumulates."""
@@ -99,17 +87,6 @@ class TestBuildParser:
 
         args = parser.parse_args(["user@host", "--gpu-info"])
         assert args.gpu_info is True
-
-    def test_script_and_args(self):
-        """Script and positional arguments are parsed."""
-        parser = build_parser()
-        # Note: Script args with -- prefixes need special handling
-        # Test with positional args only
-        args = parser.parse_intermixed_args(["user@host", "train.py", "arg1", "arg2"])
-        assert args.target == "user@host"
-        assert args.script == "train.py"
-        assert args.script_args == ["arg1", "arg2"]
-
 
 class TestMainExceptionHandling:
     """Tests for main() exception handling."""
@@ -185,7 +162,7 @@ class TestMainJobNameValidation:
         mocker.patch.object(GlobalConfig, "load", return_value=GlobalConfig(aliases={}, hosts={}))
         mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
 
-        result = main(["user@host", "-n", "invalid name!", "script.py"])
+        result = main(["user@host", "-n", "invalid name!", "--exec", "echo hi"])
 
         assert result == 1
         captured = capsys.readouterr()
@@ -198,13 +175,13 @@ class TestMainJobNameValidation:
         mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
         mock_ssh = mocker.MagicMock()
         mocker.patch("rex.cli.SSHExecutor", return_value=mock_ssh)
-        mock_run = mocker.patch("rex.commands.run.run_python", return_value=0)
+        mock_exec = mocker.patch("rex.commands.exec.exec_command", return_value=0)
 
-        result = main(["user@host", "-n", "valid-name_123", "script.py"])
+        result = main(["user@host", "-n", "valid-name_123", "--exec", "echo hi"])
 
         # Should get past validation (check_connection called before running)
         mock_ssh.check_connection.assert_called_once()
-        mock_run.assert_called_once()
+        mock_exec.assert_called_once()
 
 
 class TestFlagConflictValidation:
@@ -230,7 +207,7 @@ class TestFlagConflictValidation:
 
     def test_gpu_cpu_mutually_exclusive(self, capsys):
         """--gpu and --cpu cannot be used together."""
-        result = main(["user@host", "--gpu", "--cpu", "script.py"])
+        result = main(["user@host", "--gpu", "--cpu", "--exec", "echo"])
         assert result == 1
         captured = capsys.readouterr()
         assert "--gpu and --cpu are mutually exclusive" in captured.err
@@ -258,28 +235,21 @@ class TestFlagConflictValidation:
 
     def test_clean_requires_build(self, capsys):
         """--clean requires --build."""
-        result = main(["user@host", "--clean", "script.py"])
+        result = main(["user@host", "--clean"])
         assert result == 1
         captured = capsys.readouterr()
         assert "--clean requires --build" in captured.err
 
-    def test_no_install_requires_sync(self, capsys):
-        """--no-install requires --sync."""
-        result = main(["user@host", "--no-install", "script.py"])
-        assert result == 1
-        captured = capsys.readouterr()
-        assert "--no-install requires --sync" in captured.err
-
     def test_last_requires_job_command(self, capsys):
         """--last requires a job command."""
-        result = main(["user@host", "--last", "script.py"])
+        result = main(["user@host", "--last"])
         assert result == 1
         captured = capsys.readouterr()
         assert "--last requires" in captured.err
 
     def test_since_requires_jobs(self, capsys):
         """--since requires --jobs."""
-        result = main(["user@host", "--since", "30", "script.py"])
+        result = main(["user@host", "--since", "30"])
         assert result == 1
         captured = capsys.readouterr()
         assert "--since requires --jobs" in captured.err

@@ -19,7 +19,7 @@ class ResolvedConfig:
 
     # Composed configs
     execution: ExecutionContext | None = None
-    slurm: SlurmOptions | None = None  # None when not using SLURM
+    slurm: SlurmOptions | None = None  # None when host is not SLURM
     sync_excludes: list[str] | None = None
 
     def __post_init__(self):

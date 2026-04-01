@@ -4,18 +4,23 @@ These tests invoke rex as a subprocess to catch shell escaping issues
 that occur before arguments reach Python.
 """
 
+import os
 import subprocess
 import sys
+import tempfile
+
 import pytest
 
 
 def run_rex(*args: str, check: bool = False) -> subprocess.CompletedProcess:
-    """Run rex CLI as subprocess."""
+    """Run rex CLI as subprocess with isolated config."""
+    env = {**os.environ, "XDG_CONFIG_HOME": tempfile.mkdtemp()}
     return subprocess.run(
         [sys.executable, "-m", "rex.cli", *args],
         capture_output=True,
         text=True,
         check=check,
+        env=env,
     )
 
 
@@ -132,38 +137,17 @@ class TestCliSubprocessExecSpecialChars:
         assert "unrecognized arguments" not in result.stderr.lower()
 
 
-class TestCliSubprocessScriptArgs:
-    """Test script arguments with special characters."""
-
-    def test_script_with_quoted_args(self):
-        """Script arguments with quotes survive shell parsing."""
-        result = run_rex("testhost", "script.py", "--", '--config="path with spaces"')
-        assert result.returncode != 0
-        assert "unrecognized arguments" not in result.stderr.lower()
-
-    def test_script_with_equals(self):
-        """Script arguments with = survive shell parsing."""
-        result = run_rex("testhost", "script.py", "--", "--key=value")
-        assert result.returncode != 0
-        assert "unrecognized arguments" not in result.stderr.lower()
-
-
 class TestCliSubprocessValidation:
     """Test CLI validation via subprocess."""
 
-    def test_invalid_time_format(self):
-        """Invalid --time format is rejected."""
-        result = run_rex("testhost", "--time", "invalid", "script.py")
+    def test_slurm_options_rejected_for_non_slurm_host(self):
+        """SLURM options are rejected for non-SLURM hosts."""
+        result = run_rex("testhost", "--time", "1:00:00", "--exec", "echo")
         assert result.returncode != 0
-        assert "invalid" in result.stderr.lower() or "time" in result.stderr.lower()
-
-    def test_invalid_mem_format(self):
-        """Invalid --mem format is rejected."""
-        result = run_rex("testhost", "--mem", "notmemory", "script.py")
-        assert result.returncode != 0
+        assert "slurm" in result.stderr.lower()
 
     def test_invalid_job_name(self):
         """Invalid job name with spaces is rejected."""
-        result = run_rex("testhost", "-n", "invalid name", "script.py")
+        result = run_rex("testhost", "-n", "invalid name", "--exec", "echo")
         assert result.returncode != 0
         assert "invalid" in result.stderr.lower() or "name" in result.stderr.lower()

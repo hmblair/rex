@@ -25,7 +25,7 @@ KNOWN_HOST_FIELDS = {
     "constraint",
     "prefer",
     "default_gpu",
-    "default_slurm",
+    "slurm",
     "env",
     "sync_excludes",
 }
@@ -47,7 +47,7 @@ class HostConfig:
     constraint: str | None = None
     prefer: str | None = None
     default_gpu: bool = False
-    default_slurm: bool = False
+    slurm: bool = False
     env: dict[str, str] = field(default_factory=dict)
     sync_excludes: list[str] | None = None
 
@@ -118,7 +118,7 @@ class GlobalConfig:
                 constraint=host_data.get("constraint"),
                 prefer=host_data.get("prefer"),
                 default_gpu=host_data.get("default_gpu", False),
-                default_slurm=host_data.get("default_slurm", False),
+                slurm=host_data.get("slurm", False),
                 env=host_data.get("env", {}),
                 sync_excludes=host_data.get("sync_excludes"),
             )

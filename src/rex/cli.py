@@ -39,24 +39,21 @@ def build_parser() -> argparse.ArgumentParser:
         add_help=True,
         epilog="""
 Examples:
-  rex gpu train.py                    # run on login node
-  rex gpu -s train.py                 # run via SLURM
-  rex gpu -s -d train.py              # SLURM detached (sbatch)
-  rex gpu -d -n exp1 train.py         # detach with custom name
-  rex gpu --jobs                      # list jobs
-  rex gpu --watch --last              # wait for most recent job
-  rex gpu --push ./data ~/data        # upload directory
-  rex gpu --pull ~/checkpoints ./     # download directory
-  rex gpu --exec "ls -la ~/models"    # run shell command
-  rex gpu -s --exec "nvidia-smi"      # run shell command via SLURM
-  rex gpu --exec --login-node "ls"    # run on login node (bypass SLURM)
-  rex gpu --exec --code-dir "pytest"  # run from code_dir
-  rex gpu --read ~/data               # read file or list directory
-  rex gpu --read                      # list code_dir
-  rex gpu --sync                      # sync current project to remote
-  rex gpu --connect                   # open persistent connection
-  rex gpu --disconnect                # close connection when done
-  rex gpu --manual                    # open interactive SSH session
+  rex HOST --exec "python train.py"    # run command
+  rex HOST -d --exec "python train.py" # run detached (background)
+  rex HOST -d -n exp1 --exec "python train.py"  # detach with custom name
+  rex HOST --jobs                      # list jobs
+  rex HOST --watch --last              # wait for most recent job
+  rex HOST --push ./data ~/data        # upload directory
+  rex HOST --pull ~/checkpoints ./     # download directory
+  rex HOST --exec --login-node "ls"    # run on login node (bypass SLURM)
+  rex HOST --exec --code-dir "pytest"  # run from code_dir
+  rex HOST --read ~/data               # read file or list directory
+  rex HOST --read                      # list code_dir
+  rex HOST --sync                      # sync current project to remote
+  rex HOST --connect                   # open persistent connection
+  rex HOST --disconnect                # close connection when done
+  rex HOST --manual                    # open interactive SSH session
 """,
     )
 
@@ -70,9 +67,7 @@ Examples:
 
     # Mode flags
     parser.add_argument("-d", "--detach", action="store_true", help="Run in background")
-    parser.add_argument("-s", "--slurm", action="store_true", help="Use SLURM")
     parser.add_argument("-n", "--name", help="Job name for detached jobs")
-    parser.add_argument("-p", "--python", default="python3", help="Python interpreter")
     parser.add_argument(
         "-m",
         "--module",
@@ -163,13 +158,8 @@ Examples:
     parser.add_argument("--last", action="store_true", help="Use most recent job")
     parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument("-f", "--follow", action="store_true", help="Follow log")
-    parser.add_argument("--no-install", action="store_true", help="Skip pip install")
     parser.add_argument("--clean", action="store_true", help="Clean build")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
-
-    # Script and args
-    parser.add_argument("script", nargs="?", help="Python script to run")
-    parser.add_argument("script_args", nargs="*", help="Script arguments")
 
     return parser
 
@@ -338,13 +328,13 @@ def resolve_config(
     code_dir, run_dir = resolve_paths(project, host_config)
 
     execution = ExecutionContext(
-        python=args.python,
         modules=modules,
         code_dir=code_dir,
         run_dir=run_dir,
         env=env if env else None,
     )
 
+    use_slurm = bool(host_config and host_config.slurm)
     slurm = SlurmOptions(
         partition=partition,
         gres=gres,
@@ -353,7 +343,7 @@ def resolve_config(
         mem=mem,
         constraint=constraint,
         prefer=prefer,
-    )
+    ) if use_slurm else None
 
     # Resolve sync_excludes: project > host
     sync_excludes = None
@@ -434,10 +424,6 @@ def _validate_flag_conflicts(args: argparse.Namespace) -> None:
     if args.clean and not args.build:
         raise ValidationError("--clean requires --build")
 
-    # --no-install only valid with --sync
-    if args.no_install and args.sync is None:
-        raise ValidationError("--no-install requires --sync")
-
     # --last only valid with job commands
     job_commands = args.status or args.log or args.kill or args.watch is not None
     if args.last and not job_commands:
@@ -501,10 +487,6 @@ def _main(argv: list[str] | None = None) -> int:
     # Get host config for the alias
     host_config = global_config.get_host_config(alias_name) if alias_name else None
 
-    # Apply default_slurm from host config
-    if host_config and host_config.default_slurm and not args.slurm:
-        args.slurm = True
-
     # Set debug mode
     global DEBUG
     DEBUG = args.debug
@@ -518,7 +500,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     # Create executor
     executor: Executor
-    if args.slurm:
+    if config.slurm:
         executor = SlurmExecutor(ssh, config.slurm)
     else:
         executor = DirectExecutor(ssh)
@@ -532,6 +514,25 @@ def _main(argv: list[str] | None = None) -> int:
             validate_job_name(args.name)
         except ValueError as e:
             raise ValidationError(str(e))
+
+    # Reject SLURM CLI overrides for non-SLURM hosts
+    slurm_cli_flags = [
+        ("--partition", args.partition),
+        ("--gres", args.gres),
+        ("--time", args.time),
+        ("--cpus", args.cpus),
+        ("--mem", args.mem),
+        ("--constraint", args.constraint),
+        ("--prefer", args.prefer),
+        ("--gpu", args.gpu),
+        ("--cpu", args.cpu),
+    ]
+    if not config.slurm:
+        used = [name for name, val in slurm_cli_flags if val]
+        if used:
+            raise ValidationError(
+                f"SLURM options {', '.join(used)} require a SLURM host"
+            )
 
     # Validate SLURM options
     try:
@@ -621,8 +622,8 @@ def _main(argv: list[str] | None = None) -> int:
     if args.gpu_info:
         from rex.commands.gpus import show_gpus, show_slurm_gpus
 
-        if args.slurm:
-            partition = config.slurm.partition if config.slurm else None
+        if config.slurm:
+            partition = config.slurm.partition
             return show_slurm_gpus(ssh, partition)
         return show_gpus(ssh, target, args.json)
 
@@ -647,7 +648,7 @@ def _main(argv: list[str] | None = None) -> int:
         local_path = Path(args.sync) if args.sync != "." else None
         from rex.commands.transfer import sync
 
-        return sync(transfer, ssh, config, local_path, no_install=args.no_install)
+        return sync(transfer, config, local_path)
 
     if args.build:
         if not project:
@@ -691,16 +692,9 @@ def _main(argv: list[str] | None = None) -> int:
             raise ConfigError("No path specified and code_dir not configured")
         return read_remote(ssh, path)
 
-    # Default: run Python script
-    script = Path(args.script) if args.script else None
-    script_args = args.script_args or []
-
-    from rex.commands.run import run_python
-
-    result = run_python(executor, ctx, script, script_args, args.detach, args.name)
-    if isinstance(result, int):
-        return result
-    return 0
+    # No command specified
+    parser.print_help()
+    return 1
 
 
 if __name__ == "__main__":

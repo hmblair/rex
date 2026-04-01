@@ -5,11 +5,9 @@ from __future__ import annotations
 import subprocess
 import time
 from dataclasses import dataclass
-from pathlib import Path
-
 from rex.exceptions import SSHError
 from rex.execution.base import ExecutionContext, JobInfo, JobResult, JobStatus, rex_dir
-from rex.execution.script import SbatchBuilder, ScriptBuilder, build_context_commands, get_log_path as _get_log_path
+from rex.execution.script import SbatchBuilder, build_context_commands, get_log_path as _get_log_path
 from rex.output import debug, error, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_script_id
@@ -95,130 +93,6 @@ class SlurmExecutor:
         for key, value in self._get_options():
             builder.sbatch_option(key, value)
 
-
-    def run_foreground(
-        self, ctx: ExecutionContext, script_path: Path, args: list[str]
-    ) -> int:
-        """Run Python script via srun with streaming output."""
-        debug(f"[slurm] run_foreground: {script_path}")
-        script_id = generate_script_id()
-        remote_dir = rex_dir(ctx.run_dir)
-        remote_py = f"{remote_dir}/rex-run-{script_id}.py"
-        remote_sh = f"{remote_dir}/rex-run-{script_id}.sh"
-
-        # Copy Python script to remote
-        with open(script_path) as f:
-            script_content = f.read()
-
-        self.ssh.exec(f"mkdir -p {remote_dir}")
-        _ssh_write(self.ssh, script_content, remote_py)
-
-        # Build wrapper script
-        builder = ScriptBuilder().shebang(login=True)
-        builder.apply_context(ctx)
-        builder.run_python(ctx.python, remote_py, args)
-
-        wrapper = builder.build()
-
-        # Write wrapper to remote
-        _ssh_write(self.ssh, wrapper, remote_sh, chmod="+x")
-
-        # Execute via srun (force TTY for proper signal forwarding)
-        slurm_opts = self._build_slurm_opts()
-        exit_code = self.ssh.exec_streaming(
-            f"srun{slurm_opts} {remote_sh}; _e=$?; rm -f {remote_py} {remote_sh}; exit $_e",
-            tty=True,
-        )
-
-        return exit_code
-
-    def run_detached(
-        self,
-        ctx: ExecutionContext,
-        script_path: Path,
-        args: list[str],
-        job_name: str,
-    ) -> JobInfo:
-        """Run Python script via sbatch."""
-        debug(f"[slurm] run_detached: {script_path} as {job_name}")
-
-        remote_dir = rex_dir(ctx.run_dir)
-        remote_script = f"{remote_dir}/rex-{job_name}.py"
-        remote_sbatch = f"{remote_dir}/rex-{job_name}.sbatch"
-        remote_log = f"{remote_dir}/rex-{job_name}.log"
-
-        # Create directory and copy script
-        self.ssh.exec(f"mkdir -p {remote_dir}")
-        with open(script_path) as f:
-            script_content = f.read()
-        _ssh_write(self.ssh, script_content, remote_script)
-
-        # Build sbatch script
-        builder = SbatchBuilder().shebang(login=True)
-        builder.job_name(f"rex-{job_name}")
-        builder.output(remote_log)
-        builder.open_mode("append")
-        self._apply_options_to_builder(builder)
-
-        builder.rex_header(f"Script: {remote_script}")
-        builder.apply_context(ctx)
-
-        builder.blank_line()
-        args_str = " ".join(f"'{a}'" for a in args) if args else ""
-        python_cmd = f"{ctx.python} -u {remote_script}"
-        if args_str:
-            python_cmd += f" {args_str}"
-        builder.run_command(python_cmd)
-
-        builder.rex_footer()
-
-        sbatch_content = builder.build()
-
-        # Write sbatch script
-        _ssh_write(self.ssh, sbatch_content, remote_sbatch)
-
-        # Submit job
-        code, stdout, stderr = self.ssh.exec(f"sbatch --parsable {remote_sbatch}")
-        if code != 0 or not stdout.strip():
-            err_msg = stderr.strip() or stdout.strip() or "unknown error"
-            warn(f"sbatch failed: {err_msg}")
-            return JobInfo(
-                job_id=job_name,
-                log_path=remote_log,
-                is_slurm=True,
-                slurm_id=None,
-            )
-
-        try:
-            slurm_id = int(stdout.strip())
-        except ValueError:
-            warn(f"sbatch returned unexpected output: {stdout.strip()}")
-            return JobInfo(
-                job_id=job_name,
-                log_path=remote_log,
-                is_slurm=True,
-                slurm_id=None,
-            )
-
-        # Write submission info to log (job will append when it starts)
-        self.ssh.exec(
-            f'echo "[rex] Submitted: $(date)" > {remote_log} && '
-            f'echo "[rex] SLURM ID: {slurm_id}" >> {remote_log} && '
-            f'echo "[rex] Status: pending" >> {remote_log} && '
-            f'echo "---" >> {remote_log}'
-        )
-
-        target = self.ssh.target
-        success(f"Submitted: {job_name} (SLURM {slurm_id})")
-        print(f"Status: rex {target} --status {job_name}")
-        print(f"Log:    rex {target} --log {job_name}")
-        print(f"Kill:   rex {target} --kill {job_name}")
-        return JobInfo(
-            job_id=job_name,
-            log_path=remote_log,
-            is_slurm=True,
-            slurm_id=slurm_id,
-        )
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command via srun."""

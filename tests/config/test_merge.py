@@ -25,7 +25,6 @@ def make_args(**kwargs) -> argparse.Namespace:
         "gpu": False,
         "cpu": False,
         "modules": [],
-        "python": "python3",
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -439,14 +438,24 @@ class TestResolveConfig:
         assert isinstance(config.execution, ExecutionContext)
 
     def test_slurm_options_composed(self, tmp_path):
-        """ResolvedConfig contains SlurmOptions."""
+        """ResolvedConfig contains SlurmOptions when host uses SLURM."""
+        args = make_args()
+        project = make_project(tmp_path)
+        host_config = HostConfig(slurm=True)
+
+        config = resolve_config(args, project, host_config)
+
+        assert isinstance(config.slurm, SlurmOptions)
+
+    def test_slurm_none_when_not_slurm_host(self, tmp_path):
+        """ResolvedConfig.slurm is None for non-SLURM hosts."""
         args = make_args()
         project = make_project(tmp_path)
         host_config = HostConfig()
 
         config = resolve_config(args, project, host_config)
 
-        assert isinstance(config.slurm, SlurmOptions)
+        assert config.slurm is None
 
     def test_identity_fields_from_project(self, tmp_path):
         """name and root come from project."""
@@ -467,24 +476,6 @@ class TestResolveConfig:
 
         assert config.name is None
         assert config.root is None
-
-    def test_execution_python_from_args(self, tmp_path):
-        """ExecutionContext.python comes from args."""
-        args = make_args(python="python3.11")
-        project = make_project(tmp_path)
-
-        config = resolve_config(args, project, None)
-
-        assert config.execution.python == "python3.11"
-
-    def test_execution_python_default(self, tmp_path):
-        """ExecutionContext.python defaults to python3."""
-        args = make_args()  # python="python3" is default
-        project = make_project(tmp_path)
-
-        config = resolve_config(args, project, None)
-
-        assert config.execution.python == "python3"
 
     def test_execution_modules_from_cli(self, tmp_path):
         """CLI modules override project and host."""
@@ -570,7 +561,7 @@ class TestResolveConfig:
         """CLI partition overrides all."""
         args = make_args(partition="cli-part")
         project = make_project(tmp_path, cpu_partition="proj-part")
-        host_config = HostConfig(cpu_partition="host-part")
+        host_config = HostConfig(slurm=True, cpu_partition="host-part")
 
         config = resolve_config(args, project, host_config)
 
@@ -581,7 +572,7 @@ class TestResolveConfig:
         args = make_args(gres="gpu:2")
         project = make_project(tmp_path, gres="gpu:1")
 
-        config = resolve_config(args, project, None)
+        config = resolve_config(args, project, HostConfig(slurm=True))
 
         assert config.slurm.gres == "gpu:2"
 
@@ -589,7 +580,7 @@ class TestResolveConfig:
         """Project time used when CLI doesn't specify."""
         args = make_args()
         project = make_project(tmp_path, time="2:00:00")
-        host_config = HostConfig(time="4:00:00")
+        host_config = HostConfig(slurm=True, time="4:00:00")
 
         config = resolve_config(args, project, host_config)
 
@@ -599,7 +590,7 @@ class TestResolveConfig:
         """Host cpus used as fallback."""
         args = make_args()
         project = make_project(tmp_path)
-        host_config = HostConfig(cpus=8)
+        host_config = HostConfig(slurm=True, cpus=8)
 
         config = resolve_config(args, project, host_config)
 
@@ -609,7 +600,7 @@ class TestResolveConfig:
         """Memory resolved through priority chain."""
         args = make_args(mem="16G")
 
-        config = resolve_config(args, None, None)
+        config = resolve_config(args, None, HostConfig(slurm=True))
 
         assert config.slurm.mem == "16G"
 
@@ -618,7 +609,7 @@ class TestResolveConfig:
         args = make_args()
         project = make_project(tmp_path, constraint="skylake")
 
-        config = resolve_config(args, project, None)
+        config = resolve_config(args, project, HostConfig(slurm=True))
 
         assert config.slurm.constraint == "skylake"
 
@@ -626,6 +617,7 @@ class TestResolveConfig:
         """Prefer resolved through priority chain."""
         args = make_args(gpu=True)
         host_config = HostConfig(
+            slurm=True,
             gpu_partition="gpu",
             prefer="GPU_SKU:H100",
         )
@@ -642,16 +634,14 @@ class TestResolveConfig:
 
         assert config.name is None
         assert config.root is None
-        assert config.execution.python == "python3"
         assert config.execution.modules == []
         assert config.execution.code_dir is None
         assert config.execution.run_dir is None
-        assert config.slurm.partition is None
+        assert config.slurm is None
 
     def test_full_config_composition(self, tmp_path):
         """Full integration: all fields populated correctly."""
         args = make_args(
-            python="python3.10",
             modules=["cuda/12"],
             partition="gpu-h100",
             gres="gpu:4",
@@ -665,6 +655,7 @@ class TestResolveConfig:
             env={"CUDA_VISIBLE_DEVICES": "0,1,2,3"},
         )
         host_config = HostConfig(
+            slurm=True,
             code_dir="/home/user/code",
             run_dir="/scratch/user",
         )
@@ -676,7 +667,6 @@ class TestResolveConfig:
         assert config.root == tmp_path
 
         # Execution
-        assert config.execution.python == "python3.10"
         assert config.execution.modules == ["cuda/12"]
         assert config.execution.code_dir == "/home/user/code/ml-project"
         assert config.execution.run_dir == "/scratch/user/ml-project"

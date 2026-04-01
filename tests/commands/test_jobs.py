@@ -53,8 +53,8 @@ class TestShowLog:
 
         assert mock_ssh.exec_streaming.call_args[1]["tty"] is False
 
-    def test_checks_both_log_locations(self, mocker):
-        """Log lookup checks both ~/.rex and /tmp locations."""
+    def test_checks_default_log_location(self, mocker):
+        """Log lookup checks ~/.rex location by default."""
         mock_ssh = mocker.Mock()
         mock_ssh.exec_streaming.return_value = 0
 
@@ -62,7 +62,6 @@ class TestShowLog:
 
         cmd = mock_ssh.exec_streaming.call_args[0][0]
         assert "~/.rex/rex-abc123.log" in cmd
-        assert "/tmp/rex-abc123.log" in cmd
 
     def test_returns_exit_code(self, mocker):
         """Returns exit code from exec_streaming."""

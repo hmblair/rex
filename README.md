@@ -4,7 +4,7 @@ Remote execution tool for Python and shell commands on HPC clusters.
 
 ## Features
 
-- Run Python scripts on remote hosts via SSH or SLURM
+- Run commands on remote hosts via SSH or SLURM
 - Detached execution with job management (status, logs, kill, watch)
 - SSH connection multiplexing for fast repeated commands
 - Project configuration via `.rex.toml`
@@ -23,34 +23,30 @@ pip install -e .
 ## Quick Start
 
 ```bash
-# Run a script on a remote host
-rex user@host train.py
-
-# Run via SLURM
-rex user@host -s train.py
+# Run a command on a remote host
+rex <host> --exec "python train.py"
 
 # Detach (run in background)
-rex user@host -d train.py
+rex <host> -d --exec "python train.py"
 
 # Check job status
-rex user@host --jobs
-rex user@host --log --last
-
-# Shell commands
-rex user@host --exec "nvidia-smi"
+rex <host> --jobs
+rex <host> --log --last
 
 # File transfer
-rex user@host --push ./data ~/data
-rex user@host --pull ~/results ./
+rex <host> --push ./data ~/data
+rex <host> --pull ~/results ./
 
 # Sync project
-rex user@host --sync
+rex <host> --sync
 
 # Connection management (speeds up subsequent commands)
-rex user@host --connect
-rex user@host --exec "ls"  # fast
-rex user@host --disconnect
+rex <host> --connect
+rex <host> --exec "ls"  # fast
+rex <host> --disconnect
 ```
+
+`<host>` is either an alias from `~/.config/rex/config.toml` or a `user@host` string.
 
 ## Configuration
 
@@ -72,7 +68,7 @@ gpu_partition = "gpu"
 gres = "gpu:1"
 time = "8:00:00"
 prefer = "GPU_SKU:H100_SXM5"
-default_slurm = true                    # always use SLURM for this host
+slurm = true                    # use SLURM for this host
 
 [hosts.sherlock.env]
 MY_VAR = "value"
@@ -84,7 +80,7 @@ run_dir = "/tmp/user"
 # No SLURM settings (direct SSH)
 ```
 
-Then use: `rex sherlock train.py`
+Then use: `rex <host> --exec "python train.py"` where `<host>` is an alias like `sherlock`.
 
 ### Project Config (`.rex.toml`)
 
@@ -112,41 +108,38 @@ Config merge priority: CLI args > project .rex.toml > host config > defaults
 
 ```bash
 cd myproject/
-rex sherlock --sync       # syncs to code_dir
-rex sherlock train.py     # uses cpu_partition (default)
-rex sherlock --gpu train.py  # uses gpu_partition
-rex sherlock --build      # builds on cpu_partition
-rex sherlock --build --gpu   # builds on gpu_partition
+rex <host> --sync                           # syncs to code_dir
+rex <host> --exec "python train.py"         # uses cpu_partition (default)
+rex <host> --gpu --exec "python train.py"   # uses gpu_partition
+rex <host> --build                          # builds on cpu_partition
+rex <host> --build --gpu                    # builds on gpu_partition
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `rex host script.py [args]` | Run Python script |
-| `rex host -s script.py` | Run via SLURM (srun) |
-| `rex host -d script.py` | Run detached (background) |
-| `rex host -s -d script.py` | Submit via sbatch |
-| `rex host --exec "cmd"` | Run shell command (from run_dir) |
-| `rex host --exec --code-dir "cmd"` | Run shell command (from code_dir) |
-| `rex host --exec --login-node "cmd"` | Run on login node (bypass SLURM) |
-| `rex host --read PATH` | Read file or list directory |
+| `rex <host> --exec "cmd"` | Run command (from run_dir) |
+| `rex <host> -d --exec "cmd"` | Run detached (background) |
+| `rex <host> --exec --code-dir "cmd"` | Run shell command (from code_dir) |
+| `rex <host> --exec --login-node "cmd"` | Run on login node (bypass SLURM) |
+| `rex <host> --read PATH` | Read file or list directory |
 | `rex --jobs` | List jobs on all connected hosts |
-| `rex host --jobs` | List jobs on specific host |
-| `rex host --jobs --since 30` | Include finished jobs from last 30 mins |
-| `rex host --status JOB` | Check job status |
-| `rex host --log JOB [-f]` | Show job log (follow with -f) |
-| `rex host --kill JOB` | Kill job |
-| `rex host --watch JOB [JOB ...]` | Wait for job(s) to complete |
-| `rex host --gpu-info` | Show GPU utilization |
-| `rex host --push local [remote]` | Upload files |
-| `rex host --pull remote [local]` | Download files |
-| `rex host --sync [path]` | Rsync project |
-| `rex host --build` | Build remote venv (trackable job) |
-| `rex host --connect` | Open persistent SSH connection |
-| `rex host --disconnect` | Close persistent connection |
+| `rex <host> --jobs` | List jobs on specific host |
+| `rex <host> --jobs --since 30` | Include finished jobs from last 30 mins |
+| `rex <host> --status JOB` | Check job status |
+| `rex <host> --log JOB [-f]` | Show job log (follow with -f) |
+| `rex <host> --kill JOB` | Kill job |
+| `rex <host> --watch JOB [JOB ...]` | Wait for job(s) to complete |
+| `rex <host> --gpu-info` | Show GPU utilization |
+| `rex <host> --push local [remote]` | Upload files |
+| `rex <host> --pull remote [local]` | Download files |
+| `rex <host> --sync [path]` | Rsync project |
+| `rex <host> --build` | Build remote venv (trackable job) |
+| `rex <host> --connect` | Open persistent SSH connection |
+| `rex <host> --disconnect` | Close persistent connection |
 | `rex --connection` | List all active connections |
-| `rex host --connection` | Show connection status for host |
+| `rex <host> --connection` | Show connection status for host |
 
 ## Options
 
@@ -154,9 +147,7 @@ rex sherlock --build --gpu   # builds on gpu_partition
 |--------|-------------|
 | `-V, --version` | Show version |
 | `-d, --detach` | Run in background |
-| `-s, --slurm` | Use SLURM scheduler |
 | `-n, --name NAME` | Job name for detached jobs |
-| `-p, --python PATH` | Python interpreter path |
 | `-m, --module MOD` | Load module (repeatable) |
 | `--gpu` | Use GPU partition |
 | `--cpu` | Use CPU partition (override) |

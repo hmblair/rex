@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 
@@ -11,7 +10,6 @@ from typing import Protocol
 class ExecutionContext:
     """Shared context for execution."""
 
-    python: str = "python3"
     modules: list[str] | None = None
     code_dir: str | None = None  # From project config
     run_dir: str | None = None  # Working directory for execution
@@ -73,22 +71,6 @@ class JobResult:
 
 class Executor(Protocol):
     """Protocol for execution backends."""
-
-    def run_foreground(
-        self, ctx: ExecutionContext, script_path: Path, args: list[str]
-    ) -> int:
-        """Run script in foreground, streaming output. Returns exit code."""
-        ...
-
-    def run_detached(
-        self,
-        ctx: ExecutionContext,
-        script_path: Path,
-        args: list[str],
-        job_name: str,
-    ) -> JobInfo:
-        """Run script detached in background."""
-        ...
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command in foreground."""

@@ -12,7 +12,7 @@ install:
 		sed '/rex:start/,/rex:end/d' $(CLAUDE_MD) > $(CLAUDE_MD).tmp && \
 		mv $(CLAUDE_MD).tmp $(CLAUDE_MD); \
 	fi
-	@cat CLAUDE.md >> $(CLAUDE_MD)
+	@sed 's|\./README\.md|$(CURDIR)/README.md|g' CLAUDE.md >> $(CLAUDE_MD)
 	@echo 'Updated rex instructions in $(CLAUDE_MD)'
 
 uninstall:
