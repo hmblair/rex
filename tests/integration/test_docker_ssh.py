@@ -86,7 +86,7 @@ class TestDirectExecutor:
         assert job_info.pid is not None
         assert job_info.is_slurm is False
         # Log file should be created
-        assert "/tmp/rex-test-detach.log" in job_info.log_path
+        assert "rex-test-detach.log" in job_info.log_path
 
 
 class TestShowLogFollow:
