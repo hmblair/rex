@@ -6,10 +6,11 @@ import time
 
 from rex.execution.base import (
     ExecutionContext, JobInfo, JobResult, JobStatus,
-    log_path as _log_path, read_job_meta, rex_dir, write_job_meta,
+    list_job_meta_names, log_path as _log_path, read_job_meta, rex_dir,
+    write_job_meta,
 )
 from rex.execution.script import build_context_commands
-from rex.output import success, warn
+from rex.output import error, success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_script_id
 
@@ -52,8 +53,9 @@ class DirectExecutor:
     Logs/scripts stored in /tmp on the remote.
     """
 
-    def __init__(self, ssh: SSHExecutor):
+    def __init__(self, ssh: SSHExecutor, run_dir: str | None = None):
         self.ssh = ssh
+        self.run_dir = run_dir
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command in foreground."""
@@ -124,17 +126,17 @@ chmod +x {remote_script}"""
 
     def _pid_from_meta(self, job_id: str) -> int | None:
         """Read PID from job metadata."""
-        meta = read_job_meta(self.ssh, job_id)
+        meta = read_job_meta(self.ssh, job_id, self.run_dir)
         return meta.get("pid") if meta else None
 
     def list_jobs(self, since_minutes: int = 0) -> list[JobStatus]:
         """List all rex jobs on remote."""
         from rex.execution.base import list_job_meta_names
 
-        names = list_job_meta_names(self.ssh)
+        names = list_job_meta_names(self.ssh, self.run_dir)
         jobs = []
         for name in names:
-            meta = read_job_meta(self.ssh, name)
+            meta = read_job_meta(self.ssh, name, self.run_dir)
             if not meta:
                 continue
             pid = meta.get("pid")
@@ -165,7 +167,7 @@ chmod +x {remote_script}"""
 
     def get_log_path(self, job_id: str) -> str | None:
         """Get log file path for a job."""
-        meta = read_job_meta(self.ssh, job_id)
+        meta = read_job_meta(self.ssh, job_id, self.run_dir)
         return meta.get("log") if meta else None
 
     def kill_job(self, job_id: str) -> bool:
@@ -206,3 +208,29 @@ chmod +x {remote_script}"""
                 return JobResult(job_id=job_id, status="completed", exit_code=0)
 
             time.sleep(poll_interval)
+
+    def show_log(self, job_id: str, follow: bool = False) -> int:
+        """Show job output log."""
+        meta = read_job_meta(self.ssh, job_id, self.run_dir)
+        if not meta or "log" not in meta:
+            error("Log not found", exit_now=False)
+            return 1
+
+        log = meta["log"]
+        cmd = f'[ -f {log} ] || {{ echo "Log not found" >&2; exit 1; }}'
+
+        if follow:
+            pid = meta.get("pid")
+            if pid:
+                cmd += f'; if kill -0 {pid} 2>/dev/null; then tail -f --pid={pid} {log}; else cat {log}; fi'
+            else:
+                cmd += f'; cat {log}'
+        else:
+            cmd += f'; cat {log}'
+
+        return self.ssh.exec_streaming(cmd, tty=follow)
+
+    def last_job_id(self) -> str | None:
+        """Get the most recent job ID."""
+        names = list_job_meta_names(self.ssh, self.run_dir)
+        return names[0] if names else None

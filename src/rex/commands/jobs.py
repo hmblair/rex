@@ -8,10 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 from rex.execution.base import (
     Executor, JobResult, JobStatus,
-    list_job_meta_names, read_job_meta,
 )
-from rex.output import colorize_status, error, info, success, warn
-from rex.ssh.executor import SSHExecutor
+from rex.output import colorize_status, info, success, warn
 
 if TYPE_CHECKING:
     from rex.config import GlobalConfig
@@ -160,30 +158,6 @@ def get_status(
     return 0 if status.status == "running" else 1
 
 
-def show_log(
-    ssh: SSHExecutor, target: str, job_id: str, follow: bool = False,
-    run_dir: str | None = None,
-) -> int:
-    """Show job output log."""
-    meta = read_job_meta(ssh, job_id, run_dir)
-    if not meta or "log" not in meta:
-        error("Log not found", exit_now=False)
-        return 1
-
-    log = meta["log"]
-    cmd = f'[ -f {log} ] || {{ echo "Log not found" >&2; exit 1; }}'
-
-    if follow:
-        pid = meta.get("pid")
-        if pid:
-            cmd += f'; if kill -0 {pid} 2>/dev/null; then tail -f --pid={pid} {log}; else cat {log}; fi'
-        else:
-            cmd += f'; cat {log}'
-    else:
-        cmd += f'; cat {log}'
-
-    return ssh.exec_streaming(cmd, tty=follow)
-
 
 def kill_job(executor: Executor, job_id: str) -> int:
     """Kill a running job."""
@@ -209,7 +183,3 @@ def watch_jobs(
     return max(r.exit_code for r in results)
 
 
-def get_last_job(ssh: SSHExecutor, target: str, run_dir: str | None = None) -> str | None:
-    """Get most recent job ID from remote."""
-    names = list_job_meta_names(ssh, run_dir)
-    return names[0] if names else None

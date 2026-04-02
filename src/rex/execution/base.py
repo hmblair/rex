@@ -168,3 +168,11 @@ class Executor(Protocol):
     def watch_job(self, job_id: str, poll_interval: int = 5) -> JobResult:
         """Wait for job to complete, return final status."""
         ...
+
+    def show_log(self, job_id: str, follow: bool = False) -> int:
+        """Show job output log. Returns exit code."""
+        ...
+
+    def last_job_id(self) -> str | None:
+        """Get the most recent job ID."""
+        ...

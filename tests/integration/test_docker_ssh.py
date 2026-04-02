@@ -12,7 +12,6 @@ import pytest
 
 from rex.execution.base import ExecutionContext
 from rex.execution.direct import DirectExecutor
-from rex.commands.jobs import show_log
 from tests.integration.conftest import _DOCKER_AVAILABLE
 
 pytestmark = pytest.mark.skipif(
@@ -109,7 +108,7 @@ class TestShowLogFollow:
 
         # Run show_log with follow - should exit when job completes
         start = time.time()
-        code = show_log(ssh_server, ssh_server.target, "test-follow", follow=True)
+        code = executor.show_log("test-follow", follow=True)
         elapsed = time.time() - start
 
         # Should have taken ~1 second (job duration), not hung forever
@@ -129,7 +128,7 @@ class TestShowLogFollow:
 
         # Follow should immediately return (cat instead of tail -f)
         start = time.time()
-        code = show_log(ssh_server, ssh_server.target, "test-follow-done", follow=True)
+        code = executor.show_log("test-follow-done", follow=True)
         elapsed = time.time() - start
 
         assert elapsed < 2
@@ -149,7 +148,7 @@ class TestShowLogFollow:
 
             # Non-follow should return immediately
             start = time.time()
-            code = show_log(ssh_server, ssh_server.target, "test-nofollow", follow=False)
+            code = executor.show_log("test-nofollow", follow=False)
             elapsed = time.time() - start
 
             assert elapsed < 2

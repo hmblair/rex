@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from rex.exceptions import SSHError
 from rex.execution.base import (
     ExecutionContext, JobInfo, JobResult, JobStatus,
-    log_path as _log_path, read_job_meta, rex_dir, write_job_meta,
+    list_job_meta_names, log_path as _log_path, read_job_meta, rex_dir,
+    write_job_meta,
 )
 from rex.execution.script import SbatchBuilder, build_context_commands
 from rex.output import debug, error, success, warn
@@ -69,9 +70,10 @@ class SlurmExecutor:
         ("prefer", "prefer"),
     ]
 
-    def __init__(self, ssh: SSHExecutor, options: SlurmOptions | None = None):
+    def __init__(self, ssh: SSHExecutor, options: SlurmOptions | None = None, run_dir: str | None = None):
         self.ssh = ssh
         self.options = options or SlurmOptions()
+        self.run_dir = run_dir
 
     def _get_options(self) -> list[tuple[str, str]]:
         """Get all SLURM options as (key, value) pairs."""
@@ -317,7 +319,7 @@ REXCMD"""
 
     def get_log_path(self, job_id: str) -> str | None:
         """Get log file path."""
-        meta = read_job_meta(self.ssh, job_id)
+        meta = read_job_meta(self.ssh, job_id, self.run_dir)
         return meta.get("log") if meta else None
 
     def kill_job(self, job_id: str) -> bool:
@@ -358,3 +360,29 @@ REXCMD"""
 
             warn(f"Job {job_id} finished: {state}")
             return JobResult(job_id=job_id, status=state, exit_code=1)
+
+    def show_log(self, job_id: str, follow: bool = False) -> int:
+        """Show job output log."""
+        meta = read_job_meta(self.ssh, job_id, self.run_dir)
+        if not meta or "log" not in meta:
+            error("Log not found", exit_now=False)
+            return 1
+
+        log = meta["log"]
+        cmd = f'[ -f {log} ] || {{ echo "Log not found" >&2; exit 1; }}'
+
+        if follow:
+            pid = meta.get("pid")
+            if pid:
+                cmd += f'; if kill -0 {pid} 2>/dev/null; then tail -f --pid={pid} {log}; else cat {log}; fi'
+            else:
+                cmd += f'; cat {log}'
+        else:
+            cmd += f'; cat {log}'
+
+        return self.ssh.exec_streaming(cmd, tty=follow)
+
+    def last_job_id(self) -> str | None:
+        """Get the most recent job ID."""
+        names = list_job_meta_names(self.ssh, self.run_dir)
+        return names[0] if names else None

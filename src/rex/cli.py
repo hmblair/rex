@@ -498,15 +498,15 @@ def _main(argv: list[str] | None = None) -> int:
     # Resolve config (CLI > project > host)
     config = resolve_config(args, project, host_config)
 
+    # Use execution context from resolved config
+    ctx = config.execution or ExecutionContext()
+
     # Create executor
     executor: Executor
     if config.slurm:
-        executor = SlurmExecutor(ssh, config.slurm)
+        executor = SlurmExecutor(ssh, config.slurm, run_dir=ctx.run_dir)
     else:
-        executor = DirectExecutor(ssh)
-
-    # Use execution context from resolved config
-    ctx = config.execution or ExecutionContext()
+        executor = DirectExecutor(ssh, run_dir=ctx.run_dir)
 
     # Validate job name if provided
     if args.name:
@@ -579,41 +579,39 @@ def _main(argv: list[str] | None = None) -> int:
         return list_jobs(executor, args.json, args.since or 0)
 
     if args.status:
-        from rex.commands.jobs import get_last_job, get_status
+        from rex.commands.jobs import get_status
 
         job_id = args.status
         if args.last or job_id == "--last":
-            job_id = get_last_job(ssh, target, ctx.run_dir)
+            job_id = executor.last_job_id()
             if not job_id:
                 raise ValidationError("No jobs found")
         return get_status(executor, job_id, args.json)
 
     if args.log:
-        from rex.commands.jobs import get_last_job, show_log
-
         job_id = args.log
         if args.last or job_id == "--last":
-            job_id = get_last_job(ssh, target, ctx.run_dir)
+            job_id = executor.last_job_id()
             if not job_id:
                 raise ValidationError("No jobs found")
-        return show_log(ssh, target, job_id, args.follow, ctx.run_dir)
+        return executor.show_log(job_id, args.follow)
 
     if args.kill:
-        from rex.commands.jobs import get_last_job, kill_job
+        from rex.commands.jobs import kill_job
 
         job_id = args.kill
         if args.last or job_id == "--last":
-            job_id = get_last_job(ssh, target, ctx.run_dir)
+            job_id = executor.last_job_id()
             if not job_id:
                 raise ValidationError("No jobs found")
         return kill_job(executor, job_id)
 
     if args.watch is not None:
-        from rex.commands.jobs import get_last_job, watch_jobs
+        from rex.commands.jobs import watch_jobs
 
         job_ids = args.watch
         if not job_ids or args.last:
-            job_id = get_last_job(ssh, target, ctx.run_dir)
+            job_id = executor.last_job_id()
             if not job_id:
                 raise ValidationError("No jobs found")
             job_ids = [job_id]

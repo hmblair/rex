@@ -226,7 +226,7 @@ class TestFlagConflictValidation:
         mocker.patch("rex.config.project.ProjectConfig.find_and_load", return_value=None)
         mock_ssh = mocker.MagicMock()
         mocker.patch("rex.cli.SSHExecutor", return_value=mock_ssh)
-        mocker.patch("rex.commands.jobs.show_log", return_value=0)
+        mocker.patch("rex.execution.direct.DirectExecutor.show_log", return_value=0)
 
         # Should not raise conflict error (may fail later due to missing job)
         result = main(["user@host", "--log", "job123", "--follow"])
