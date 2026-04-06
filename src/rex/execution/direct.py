@@ -5,14 +5,14 @@ from __future__ import annotations
 import time
 
 from rex.execution.base import (
-    ExecutionContext, JobInfo, JobResult, JobStatus,
+    BaseExecutor, ExecutionContext, JobInfo, JobResult, JobStatus,
     list_job_meta_names, log_path as _log_path, read_job_meta, rex_dir,
     write_job_meta,
 )
 from rex.execution.script import build_context_commands
-from rex.output import error, success, warn
+from rex.output import success, warn
 from rex.ssh.executor import SSHExecutor
-from rex.utils import generate_script_id
+from rex.utils import generate_job_name
 
 
 def _run_detached_nohup(
@@ -20,7 +20,6 @@ def _run_detached_nohup(
     bash_cmd: str,
     remote_log: str,
     job_name: str,
-    run_dir: str | None,
 ) -> JobInfo:
     """Run command detached via nohup and return JobInfo."""
     nohup_cmd = (
@@ -31,7 +30,7 @@ def _run_detached_nohup(
     _, stdout, _ = ssh.exec(nohup_cmd)
     pid = int(stdout.strip()) if stdout.strip() else None
 
-    write_job_meta(ssh, job_name, run_dir, remote_log, pid=pid)
+    write_job_meta(ssh, job_name, remote_log, pid=pid)
 
     target = ssh.target
     success(f"Detached: {job_name} (PID {pid})")
@@ -46,52 +45,35 @@ def _run_detached_nohup(
     )
 
 
-class DirectExecutor:
+class DirectExecutor(BaseExecutor):
     """Direct SSH execution (non-SLURM).
 
     Uses nohup for detached jobs, pgrep/kill for job management.
-    Logs/scripts stored in /tmp on the remote.
     """
 
-    def __init__(self, ssh: SSHExecutor, run_dir: str | None = None):
-        self.ssh = ssh
-        self.run_dir = run_dir
+    def __init__(self, ssh: SSHExecutor):
+        super().__init__(ssh)
 
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
-        """Execute shell command in foreground."""
-        # Check for heredoc delimiter collision
-        if "\nREXCMD\n" in f"\n{cmd}\n":
-            from rex.output import error
-            error("Command contains 'REXCMD' as a line, which conflicts with internal delimiter")
-            return 1
+        """Execute shell command in foreground.
 
-        script_id = generate_script_id()
-        remote_cmd = f"/tmp/rex-exec-{script_id}.sh"
+        Submits as a detached job, then streams the log. Ctrl+C kills
+        the remote process.
+        """
+        import signal
 
-        # Build setup prefix
-        context_cmds = build_context_commands(ctx)
-        prefix = "\n".join(context_cmds) + "\n" if context_cmds else ""
+        job_name = generate_job_name()
+        job_info = self.exec_detached(ctx, cmd, job_name)
 
-        # Write command to temp file using heredoc (preserves all quoting)
-        # The quoted 'REXCMD' prevents any shell interpretation
-        write_script = f"""cat > {remote_cmd} << 'REXCMD'
-#!/bin/bash -l
-{prefix}{cmd}
-REXCMD
-chmod +x {remote_cmd}"""
+        def on_sigint(sig, frame):
+            self.kill_job(job_info.job_id)
+            raise SystemExit(130)
 
-        # Write the command file
-        code, _, stderr = self.ssh.exec(write_script)
-        if code != 0:
-            from rex.output import warn
-            warn(f"Failed to write command script: {stderr}")
-            return code
-
-        # Execute and cleanup
-        return self.ssh.exec_streaming(
-            f"{remote_cmd}; _e=$?; rm -f {remote_cmd}; exit $_e",
-            tty=None,
-        )
+        old_handler = signal.signal(signal.SIGINT, on_sigint)
+        try:
+            return self.show_log(job_info.job_id, follow=True)
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
 
     def exec_detached(
         self, ctx: ExecutionContext, cmd: str, job_name: str
@@ -121,22 +103,20 @@ chmod +x {remote_script}"""
             raise ExecutionError(f"Failed to write script: {stderr}")
 
         return _run_detached_nohup(
-            self.ssh, remote_script, remote_log, job_name, ctx.run_dir
+            self.ssh, remote_script, remote_log, job_name
         )
 
     def _pid_from_meta(self, job_id: str) -> int | None:
         """Read PID from job metadata."""
-        meta = read_job_meta(self.ssh, job_id, self.run_dir)
+        meta = read_job_meta(self.ssh, job_id)
         return meta.get("pid") if meta else None
 
     def list_jobs(self, since_minutes: int = 0) -> list[JobStatus]:
         """List all rex jobs on remote."""
-        from rex.execution.base import list_job_meta_names
-
-        names = list_job_meta_names(self.ssh, self.run_dir)
+        names = list_job_meta_names(self.ssh)
         jobs = []
         for name in names:
-            meta = read_job_meta(self.ssh, name, self.run_dir)
+            meta = read_job_meta(self.ssh, name)
             if not meta:
                 continue
             pid = meta.get("pid")
@@ -164,11 +144,6 @@ chmod +x {remote_script}"""
         return JobStatus(
             job_id=job_id, status=status, pid=pid if status == "running" else None
         )
-
-    def get_log_path(self, job_id: str) -> str | None:
-        """Get log file path for a job."""
-        meta = read_job_meta(self.ssh, job_id, self.run_dir)
-        return meta.get("log") if meta else None
 
     def kill_job(self, job_id: str) -> bool:
         """Kill a running job."""
@@ -209,28 +184,3 @@ chmod +x {remote_script}"""
 
             time.sleep(poll_interval)
 
-    def show_log(self, job_id: str, follow: bool = False) -> int:
-        """Show job output log."""
-        meta = read_job_meta(self.ssh, job_id, self.run_dir)
-        if not meta or "log" not in meta:
-            error("Log not found", exit_now=False)
-            return 1
-
-        log = meta["log"]
-        cmd = f'[ -f {log} ] || {{ echo "Log not found" >&2; exit 1; }}'
-
-        if follow:
-            pid = meta.get("pid")
-            if pid:
-                cmd += f'; if kill -0 {pid} 2>/dev/null; then tail -f --pid={pid} {log}; else cat {log}; fi'
-            else:
-                cmd += f'; cat {log}'
-        else:
-            cmd += f'; cat {log}'
-
-        return self.ssh.exec_streaming(cmd, tty=follow)
-
-    def last_job_id(self) -> str | None:
-        """Get the most recent job ID."""
-        names = list_job_meta_names(self.ssh, self.run_dir)
-        return names[0] if names else None

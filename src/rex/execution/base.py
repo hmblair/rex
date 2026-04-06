@@ -41,20 +41,23 @@ def log_path(job_name: str, run_dir: str | None = None) -> str:
     return f"{rex_dir(run_dir)}/rex-{job_name}.log"
 
 
-def job_meta_dir(run_dir: str | None = None) -> str:
-    """Return the directory for job metadata files."""
-    return f"{rex_dir(run_dir)}/jobs"
+def job_meta_dir() -> str:
+    """Return the directory for job metadata files.
+
+    Always ~/.rex/jobs — a fixed location so readers and writers
+    agree without needing to know run_dir.
+    """
+    return "~/.rex/jobs"
 
 
-def job_meta_path(job_name: str, run_dir: str | None = None) -> str:
+def job_meta_path(job_name: str) -> str:
     """Return the metadata file path for a given job name."""
-    return f"{job_meta_dir(run_dir)}/{job_name}.json"
+    return f"{job_meta_dir()}/{job_name}.json"
 
 
 def write_job_meta(
     ssh: "SSHExecutor",
     job_name: str,
-    run_dir: str | None,
     log: str,
     *,
     pid: int | None = None,
@@ -67,17 +70,17 @@ def write_job_meta(
     if slurm_id is not None:
         meta["slurm_id"] = slurm_id
 
-    meta_dir = job_meta_dir(run_dir)
-    path = job_meta_path(job_name, run_dir)
+    meta_dir = job_meta_dir()
+    path = job_meta_path(job_name)
     payload = json.dumps(meta)
     ssh.exec(f"mkdir -p {meta_dir} && echo '{payload}' > {path}")
 
 
 def read_job_meta(
-    ssh: "SSHExecutor", job_name: str, run_dir: str | None = None
+    ssh: "SSHExecutor", job_name: str
 ) -> dict[str, Any] | None:
     """Read job metadata from the remote. Returns None if not found."""
-    path = job_meta_path(job_name, run_dir)
+    path = job_meta_path(job_name)
     code, stdout, _ = ssh.exec(f"cat {path} 2>/dev/null")
     if code != 0 or not stdout.strip():
         return None
@@ -87,11 +90,9 @@ def read_job_meta(
         return None
 
 
-def list_job_meta_names(
-    ssh: "SSHExecutor", run_dir: str | None = None
-) -> list[str]:
+def list_job_meta_names(ssh: "SSHExecutor") -> list[str]:
     """List all job names that have metadata files."""
-    meta_d = job_meta_dir(run_dir)
+    meta_d = job_meta_dir()
     code, stdout, _ = ssh.exec(
         f"ls -t {meta_d}/*.json 2>/dev/null | sed 's|.*/||; s|\\.json$||'"
     )
@@ -176,3 +177,43 @@ class Executor(Protocol):
     def last_job_id(self) -> str | None:
         """Get the most recent job ID."""
         ...
+
+
+class BaseExecutor:
+    """Shared implementation for metadata-based job management."""
+
+    def __init__(self, ssh: "SSHExecutor"):
+        self.ssh = ssh
+
+    def get_log_path(self, job_id: str) -> str | None:
+        """Get log file path for a job."""
+        meta = read_job_meta(self.ssh, job_id)
+        return meta.get("log") if meta else None
+
+    def show_log(self, job_id: str, follow: bool = False) -> int:
+        """Show job output log."""
+        from rex.output import error
+
+        meta = read_job_meta(self.ssh, job_id)
+        if not meta or "log" not in meta:
+            error("Log not found", exit_now=False)
+            return 1
+
+        log = meta["log"]
+        cmd = f'[ -f {log} ] || {{ echo "Log not found" >&2; exit 1; }}'
+
+        if follow:
+            pid = meta.get("pid")
+            if pid:
+                cmd += f'; if kill -0 {pid} 2>/dev/null; then tail -f --pid={pid} {log}; else cat {log}; fi'
+            else:
+                cmd += f'; cat {log}'
+        else:
+            cmd += f'; cat {log}'
+
+        return self.ssh.exec_streaming(cmd, tty=follow)
+
+    def last_job_id(self) -> str | None:
+        """Get the most recent job ID."""
+        names = list_job_meta_names(self.ssh)
+        return names[0] if names else None

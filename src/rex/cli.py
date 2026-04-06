@@ -504,9 +504,9 @@ def _main(argv: list[str] | None = None) -> int:
     # Create executor
     executor: Executor
     if config.slurm:
-        executor = SlurmExecutor(ssh, config.slurm, run_dir=ctx.run_dir)
+        executor = SlurmExecutor(ssh, config.slurm)
     else:
-        executor = DirectExecutor(ssh, run_dir=ctx.run_dir)
+        executor = DirectExecutor(ssh)
 
     # Validate job name if provided
     if args.name:

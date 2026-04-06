@@ -1,121 +1,84 @@
 """Tests for direct (non-SLURM) execution."""
 
+import json
+import signal
+
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
 from rex.execution.direct import DirectExecutor
-from rex.execution.base import ExecutionContext
+from rex.execution.base import ExecutionContext, JobInfo
 
 
 class TestDirectExecutorExecForeground:
-    """Tests for DirectExecutor.exec_foreground with special characters."""
+    """Tests for DirectExecutor.exec_foreground delegation."""
 
     @pytest.fixture
     def mock_ssh(self):
         """Create a mock SSH executor."""
         ssh = MagicMock()
-        ssh.exec.return_value = (0, "", "")
+        ssh.target = "user@host"
+        ssh.exec.return_value = (0, "12345", "")
         ssh.exec_streaming.return_value = 0
-        ssh.exec_script_streaming.return_value = 0
         return ssh
 
-    def _get_heredoc_content(self, mock_ssh):
-        """Extract command from heredoc passed to ssh.exec."""
-        heredoc = mock_ssh.exec.call_args[0][0]
-        return heredoc
-
-    def test_exec_foreground_double_quotes(self, mock_ssh):
-        """exec_foreground preserves double quotes."""
+    def test_exec_foreground_delegates_to_detached(self, mock_ssh):
+        """exec_foreground submits a detached job then streams the log."""
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
-        executor.exec_foreground(ctx, 'echo "hello world"')
+        with patch.object(executor, "exec_detached") as mock_detach, \
+             patch.object(executor, "show_log", return_value=0) as mock_show:
+            mock_detach.return_value = JobInfo(
+                job_id="test-123", log_path="/tmp/test.log",
+                is_slurm=False, pid=42
+            )
+            result = executor.exec_foreground(ctx, "echo hello")
 
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert '"hello world"' in heredoc
+        mock_detach.assert_called_once()
+        assert mock_detach.call_args[0][0] is ctx
+        assert mock_detach.call_args[0][1] == "echo hello"
+        mock_show.assert_called_once_with("test-123", follow=True)
+        assert result == 0
 
-    def test_exec_foreground_single_quotes(self, mock_ssh):
-        """exec_foreground preserves single quotes."""
+    def test_exec_foreground_returns_show_log_exit_code(self, mock_ssh):
+        """exec_foreground returns the exit code from show_log."""
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
-        executor.exec_foreground(ctx, "echo 'hello world'")
+        with patch.object(executor, "exec_detached") as mock_detach, \
+             patch.object(executor, "show_log", return_value=42) as mock_show:
+            mock_detach.return_value = JobInfo(
+                job_id="test-123", log_path="/tmp/test.log",
+                is_slurm=False, pid=42
+            )
+            result = executor.exec_foreground(ctx, "exit 42")
 
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert "'hello world'" in heredoc
+        assert result == 42
 
-    def test_exec_foreground_dollar_variable(self, mock_ssh):
-        """exec_foreground preserves dollar sign variables."""
+    def test_exec_foreground_installs_sigint_handler(self, mock_ssh):
+        """exec_foreground installs a SIGINT handler that kills the job."""
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
-        executor.exec_foreground(ctx, "echo $HOME $USER")
+        captured_handler = None
 
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert "$HOME" in heredoc
-        assert "$USER" in heredoc
+        def capture_signal(sig, handler):
+            nonlocal captured_handler
+            if sig == signal.SIGINT and callable(handler):
+                captured_handler = handler
+            return signal.SIG_DFL
 
-    def test_exec_foreground_pipe(self, mock_ssh):
-        """exec_foreground preserves pipe characters."""
-        executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext()
+        with patch.object(executor, "exec_detached") as mock_detach, \
+             patch.object(executor, "show_log", return_value=0), \
+             patch("signal.signal", side_effect=capture_signal):
+            mock_detach.return_value = JobInfo(
+                job_id="test-123", log_path="/tmp/test.log",
+                is_slurm=False, pid=42
+            )
+            executor.exec_foreground(ctx, "echo hello")
 
-        executor.exec_foreground(ctx, "ls -la | grep foo")
-
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert "|" in heredoc
-
-    def test_exec_foreground_semicolon(self, mock_ssh):
-        """exec_foreground preserves semicolons."""
-        executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext()
-
-        executor.exec_foreground(ctx, "cd /tmp; ls; pwd")
-
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert ";" in heredoc
-
-    def test_exec_foreground_ampersand(self, mock_ssh):
-        """exec_foreground preserves ampersands."""
-        executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext()
-
-        executor.exec_foreground(ctx, "cmd1 && cmd2 || cmd3")
-
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert "&&" in heredoc
-        assert "||" in heredoc
-
-    def test_exec_foreground_backticks(self, mock_ssh):
-        """exec_foreground preserves backticks."""
-        executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext()
-
-        executor.exec_foreground(ctx, "echo `date`")
-
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert "`" in heredoc
-
-    def test_exec_foreground_parentheses(self, mock_ssh):
-        """exec_foreground preserves parentheses."""
-        executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext()
-
-        executor.exec_foreground(ctx, "(cd /tmp && ls)")
-
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert "(" in heredoc
-        assert ")" in heredoc
-
-    def test_exec_foreground_glob(self, mock_ssh):
-        """exec_foreground preserves glob patterns."""
-        executor = DirectExecutor(mock_ssh)
-        ctx = ExecutionContext()
-
-        executor.exec_foreground(ctx, "ls *.py")
-
-        heredoc = self._get_heredoc_content(mock_ssh)
-        assert "*" in heredoc
+        assert captured_handler is not None
 
 
 class TestDirectExecutorExecDetached:
