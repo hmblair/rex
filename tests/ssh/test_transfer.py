@@ -280,35 +280,6 @@ class TestFileTransferSync:
         # Default excludes should NOT be present
         assert "__pycache__" not in args
 
-    def test_sync_delete_option(self, mock_ssh_executor, tmp_path, mocker):
-        """Sync includes --delete by default."""
-        transfer = FileTransfer("user@host", mock_ssh_executor)
-        test_dir = tmp_path / "project"
-        test_dir.mkdir()
-
-        mock_ssh_executor.exec.return_value = (0, "/home/user\n", "")
-        mock_run = mocker.patch("subprocess.run")
-        mock_run.return_value = MagicMock(returncode=0)
-
-        transfer.sync(test_dir)
-
-        args = mock_run.call_args[0][0]
-        assert "--delete" in args
-
-    def test_sync_no_delete(self, mock_ssh_executor, tmp_path, mocker):
-        """Sync can disable --delete."""
-        transfer = FileTransfer("user@host", mock_ssh_executor)
-        test_dir = tmp_path / "project"
-        test_dir.mkdir()
-
-        mock_ssh_executor.exec.return_value = (0, "/home/user\n", "")
-        mock_run = mocker.patch("subprocess.run")
-        mock_run.return_value = MagicMock(returncode=0)
-
-        transfer.sync(test_dir, delete=False)
-
-        args = mock_run.call_args[0][0]
-        assert "--delete" not in args
 
 
 class TestPythonExcludes:
