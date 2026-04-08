@@ -4,6 +4,7 @@ COMPLETIONS  ?= $(HOME)/.local/share/zsh/site-functions
 .PHONY: install uninstall
 
 install:
+	@test -d .venv || uv venv
 	@uv pip install -e .
 	@mkdir -p $(COMPLETIONS)
 	@cp completions/_rex $(COMPLETIONS)/_rex
