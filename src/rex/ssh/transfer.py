@@ -139,7 +139,7 @@ class FileTransfer:
         remote: str | None = None,
         *,
         excludes: list[str] | None = None,
-        delete: bool = True,
+        delete: bool = False,
     ) -> None:
         """Rsync project to remote with Python project defaults.
 
