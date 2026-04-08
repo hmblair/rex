@@ -131,7 +131,7 @@ rex <host> --build --gpu                    # builds on gpu_partition
 | `rex <host> --log JOB [-f]` | Show job log (follow with -f) |
 | `rex <host> --kill JOB` | Kill job |
 | `rex <host> --watch JOB [JOB ...]` | Wait for job(s) to complete |
-| `rex <host> --gpu-info` | Show GPU utilization |
+| `rex <host> --info` | Show CPU, memory, and GPU info |
 | `rex <host> --push local [remote]` | Upload files |
 | `rex <host> --pull remote [local]` | Download files |
 | `rex <host> --sync [path]` | Rsync project |

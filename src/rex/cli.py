@@ -113,7 +113,7 @@ Examples:
         "--watch", nargs="*", metavar="JOB", help="Wait for job(s) to complete"
     )
     parser.add_argument(
-        "--gpu-info", action="store_true", dest="gpu_info", help="Show GPU info"
+        "--info", action="store_true", help="Show remote host info (CPU, memory, GPUs)"
     )
 
     parser.add_argument("--push", nargs="+", metavar="PATH", help="Push files")
@@ -386,8 +386,8 @@ def _validate_flag_conflicts(args: argparse.Namespace) -> None:
         commands.append("--kill")
     if args.watch is not None:
         commands.append("--watch")
-    if args.gpu_info:
-        commands.append("--gpu-info")
+    if args.info:
+        commands.append("--info")
     if args.push:
         commands.append("--push")
     if args.pull:
@@ -617,13 +617,13 @@ def _main(argv: list[str] | None = None) -> int:
             job_ids = [job_id]
         return watch_jobs(executor, job_ids, args.json)
 
-    if args.gpu_info:
-        from rex.commands.gpus import show_gpus, show_slurm_gpus
+    if args.info:
+        from rex.commands.info import show_info, show_slurm_info
 
         if config.slurm:
             partition = config.slurm.partition
-            return show_slurm_gpus(ssh, partition)
-        return show_gpus(ssh, target, args.json)
+            return show_slurm_info(ssh, partition)
+        return show_info(ssh, target, args.json)
 
     if args.push:
         transfer = FileTransfer(target, ssh)

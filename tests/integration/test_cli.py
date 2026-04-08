@@ -85,8 +85,8 @@ class TestBuildParser:
         args = parser.parse_args(["user@host", "--connect"])
         assert args.connect is True
 
-        args = parser.parse_args(["user@host", "--gpu-info"])
-        assert args.gpu_info is True
+        args = parser.parse_args(["user@host", "--info"])
+        assert args.info is True
 
 class TestMainExceptionHandling:
     """Tests for main() exception handling."""
