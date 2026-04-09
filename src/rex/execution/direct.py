@@ -9,7 +9,7 @@ from rex.execution.base import (
     list_job_meta_names, log_path as _log_path, read_job_meta, rex_dir,
     write_job_meta,
 )
-from rex.execution.script import build_context_commands
+from rex.execution.script import build_script
 from rex.output import success, warn
 from rex.ssh.executor import SSHExecutor
 from rex.utils import generate_job_name
@@ -54,26 +54,39 @@ class DirectExecutor(BaseExecutor):
     def __init__(self, ssh: SSHExecutor):
         super().__init__(ssh)
 
+    def _write_script(self, remote_path: str, content: str) -> None:
+        """Write a script to the remote host."""
+        write_cmd = f"""cat > {remote_path} << 'REXSCRIPT'
+{content}
+REXSCRIPT
+chmod +x {remote_path}"""
+        code, _, stderr = self.ssh.exec(write_cmd)
+        if code != 0:
+            from rex.exceptions import ExecutionError
+            raise ExecutionError(f"Failed to write script: {stderr}")
+
     def exec_foreground(self, ctx: ExecutionContext, cmd: str) -> int:
         """Execute shell command in foreground.
 
-        Submits as a detached job, then streams the log. Ctrl+C kills
-        the remote process.
+        Runs directly over SSH with output teed to a log file.
+        Dies on disconnect — use exec_detached for persistent jobs.
         """
-        import signal
-
         job_name = generate_job_name()
-        job_info = self.exec_detached(ctx, cmd, job_name)
+        remote_dir = rex_dir(ctx.run_dir)
+        remote_script = f"{remote_dir}/rex-{job_name}.sh"
+        remote_log = _log_path(job_name, ctx.run_dir)
 
-        def on_sigint(sig, frame):
-            self.kill_job(job_info.job_id)
-            raise SystemExit(130)
+        self.ssh.exec(f"mkdir -p {remote_dir}")
+        self._write_script(remote_script, build_script(ctx, cmd))
 
-        old_handler = signal.signal(signal.SIGINT, on_sigint)
-        try:
-            return self.show_log(job_info.job_id, follow=True)
-        finally:
-            signal.signal(signal.SIGINT, old_handler)
+        exit_code = self.ssh.exec_streaming(
+            f"{remote_script} 2>&1 | tee {remote_log}; "
+            f"_e=${{PIPESTATUS[0]}}; rm -f {remote_script}; exit $_e",
+            tty=True,
+        )
+
+        write_job_meta(self.ssh, job_name, remote_log)
+        return exit_code
 
     def exec_detached(
         self, ctx: ExecutionContext, cmd: str, job_name: str
@@ -84,23 +97,7 @@ class DirectExecutor(BaseExecutor):
         remote_log = _log_path(job_name, ctx.run_dir)
 
         self.ssh.exec(f"mkdir -p {remote_dir}")
-
-        # Build script content
-        context_cmds = build_context_commands(ctx)
-        prefix = "\n".join(context_cmds) + "\n" if context_cmds else ""
-
-        script_content = f"#!/bin/bash -l\n{prefix}{cmd}"
-
-        # Write script to remote using heredoc
-        write_cmd = f"""cat > {remote_script} << 'REXSCRIPT'
-{script_content}
-REXSCRIPT
-chmod +x {remote_script}"""
-
-        code, _, stderr = self.ssh.exec(write_cmd)
-        if code != 0:
-            from rex.exceptions import ExecutionError
-            raise ExecutionError(f"Failed to write script: {stderr}")
+        self._write_script(remote_script, build_script(ctx, cmd))
 
         return _run_detached_nohup(
             self.ssh, remote_script, remote_log, job_name

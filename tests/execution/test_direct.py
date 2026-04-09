@@ -1,7 +1,6 @@
 """Tests for direct (non-SLURM) execution."""
 
 import json
-import signal
 
 import pytest
 from unittest.mock import MagicMock, patch, call
@@ -11,74 +10,51 @@ from rex.execution.base import ExecutionContext, JobInfo
 
 
 class TestDirectExecutorExecForeground:
-    """Tests for DirectExecutor.exec_foreground delegation."""
+    """Tests for DirectExecutor.exec_foreground."""
 
     @pytest.fixture
     def mock_ssh(self):
         """Create a mock SSH executor."""
         ssh = MagicMock()
         ssh.target = "user@host"
-        ssh.exec.return_value = (0, "12345", "")
+        ssh.exec.return_value = (0, "", "")
         ssh.exec_streaming.return_value = 0
         return ssh
 
-    def test_exec_foreground_delegates_to_detached(self, mock_ssh):
-        """exec_foreground submits a detached job then streams the log."""
+    def test_exec_foreground_streams_via_ssh(self, mock_ssh):
+        """exec_foreground runs the script directly over SSH with tee."""
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
-        with patch.object(executor, "exec_detached") as mock_detach, \
-             patch.object(executor, "show_log", return_value=0) as mock_show:
-            mock_detach.return_value = JobInfo(
-                job_id="test-123", log_path="/tmp/test.log",
-                is_slurm=False, pid=42
-            )
-            result = executor.exec_foreground(ctx, "echo hello")
+        result = executor.exec_foreground(ctx, "echo hello")
 
-        mock_detach.assert_called_once()
-        assert mock_detach.call_args[0][0] is ctx
-        assert mock_detach.call_args[0][1] == "echo hello"
-        mock_show.assert_called_once_with("test-123", follow=True)
+        mock_ssh.exec_streaming.assert_called_once()
+        streaming_cmd = mock_ssh.exec_streaming.call_args[0][0]
+        assert "tee" in streaming_cmd
+        assert "PIPESTATUS" in streaming_cmd
         assert result == 0
 
-    def test_exec_foreground_returns_show_log_exit_code(self, mock_ssh):
-        """exec_foreground returns the exit code from show_log."""
+    def test_exec_foreground_returns_exit_code(self, mock_ssh):
+        """exec_foreground returns the exit code from exec_streaming."""
+        mock_ssh.exec_streaming.return_value = 42
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
-        with patch.object(executor, "exec_detached") as mock_detach, \
-             patch.object(executor, "show_log", return_value=42) as mock_show:
-            mock_detach.return_value = JobInfo(
-                job_id="test-123", log_path="/tmp/test.log",
-                is_slurm=False, pid=42
-            )
-            result = executor.exec_foreground(ctx, "exit 42")
+        result = executor.exec_foreground(ctx, "exit 42")
 
         assert result == 42
 
-    def test_exec_foreground_installs_sigint_handler(self, mock_ssh):
-        """exec_foreground installs a SIGINT handler that kills the job."""
+    def test_exec_foreground_writes_metadata(self, mock_ssh):
+        """exec_foreground writes job metadata after completion."""
         executor = DirectExecutor(mock_ssh)
         ctx = ExecutionContext()
 
-        captured_handler = None
-
-        def capture_signal(sig, handler):
-            nonlocal captured_handler
-            if sig == signal.SIGINT and callable(handler):
-                captured_handler = handler
-            return signal.SIG_DFL
-
-        with patch.object(executor, "exec_detached") as mock_detach, \
-             patch.object(executor, "show_log", return_value=0), \
-             patch("signal.signal", side_effect=capture_signal):
-            mock_detach.return_value = JobInfo(
-                job_id="test-123", log_path="/tmp/test.log",
-                is_slurm=False, pid=42
-            )
+        with patch("rex.execution.direct.write_job_meta") as mock_meta:
             executor.exec_foreground(ctx, "echo hello")
 
-        assert captured_handler is not None
+        mock_meta.assert_called_once()
+        args = mock_meta.call_args[0]
+        assert args[0] is mock_ssh
 
 
 class TestDirectExecutorExecDetached:
@@ -192,3 +168,186 @@ class TestDirectExecutorExecDetached:
         # Find the nohup call
         nohup_cmd = self._find_exec_call(mock_ssh, "nohup")
         assert "~/.rex/rex-test-job.sh" in nohup_cmd
+
+
+class TestDirectWriteScript:
+    """Tests for DirectExecutor._write_script."""
+
+    @pytest.fixture
+    def mock_ssh(self):
+        ssh = MagicMock()
+        ssh.target = "user@host"
+        ssh.exec.return_value = (0, "", "")
+        return ssh
+
+    def test_creates_executable(self, mock_ssh):
+        """_write_script writes via heredoc and sets +x."""
+        executor = DirectExecutor(mock_ssh)
+        executor._write_script("/tmp/test.sh", "#!/bin/bash\necho hi\n")
+
+        write_call = mock_ssh.exec.call_args[0][0]
+        assert "REXSCRIPT" in write_call
+        assert "chmod +x" in write_call
+        assert "#!/bin/bash" in write_call
+
+    def test_raises_on_failure(self, mock_ssh):
+        """_write_script raises ExecutionError when ssh.exec fails."""
+        from rex.exceptions import ExecutionError
+        mock_ssh.exec.return_value = (1, "", "permission denied")
+        executor = DirectExecutor(mock_ssh)
+
+        with pytest.raises(ExecutionError, match="Failed to write script"):
+            executor._write_script("/tmp/test.sh", "#!/bin/bash\necho hi\n")
+
+
+class TestDirectListJobs:
+    """Tests for DirectExecutor.list_jobs."""
+
+    @pytest.fixture
+    def mock_ssh(self):
+        ssh = MagicMock()
+        ssh.target = "user@host"
+        ssh.exec.return_value = (0, "", "")
+        return ssh
+
+    def test_reads_metadata_and_checks_pid(self, mock_ssh):
+        """list_jobs reads metadata files and checks PID status."""
+        with patch("rex.execution.direct.list_job_meta_names", return_value=["job-1", "job-2"]), \
+             patch("rex.execution.direct.read_job_meta") as mock_read:
+            mock_read.side_effect = [
+                {"pid": 100, "log": "/tmp/1.log"},
+                {"pid": 200, "log": "/tmp/2.log"},
+            ]
+            # job-1 running, job-2 completed
+            mock_ssh.exec.side_effect = [
+                (0, "", ""),   # kill -0 100: alive
+                (1, "", ""),   # kill -0 200: dead
+            ]
+            executor = DirectExecutor(mock_ssh)
+            jobs = executor.list_jobs()
+
+        assert len(jobs) == 2
+        assert jobs[0].status == "running"
+        assert jobs[0].pid == 100
+        assert jobs[1].status == "completed"
+        assert jobs[1].pid is None
+
+    def test_no_pid_means_completed(self, mock_ssh):
+        """Jobs without a PID are treated as completed."""
+        with patch("rex.execution.direct.list_job_meta_names", return_value=["job-1"]), \
+             patch("rex.execution.direct.read_job_meta", return_value={"log": "/tmp/1.log"}):
+            executor = DirectExecutor(mock_ssh)
+            jobs = executor.list_jobs()
+
+        assert len(jobs) == 1
+        assert jobs[0].status == "completed"
+
+
+class TestDirectGetStatus:
+    """Tests for DirectExecutor.get_status."""
+
+    @pytest.fixture
+    def mock_ssh(self):
+        ssh = MagicMock()
+        ssh.target = "user@host"
+        return ssh
+
+    def test_running(self, mock_ssh):
+        """get_status returns running when PID is alive."""
+        mock_ssh.exec.return_value = (0, "", "")
+        with patch("rex.execution.direct.read_job_meta", return_value={"pid": 42}):
+            executor = DirectExecutor(mock_ssh)
+            status = executor.get_status("job-1")
+
+        assert status.status == "running"
+        assert status.pid == 42
+
+    def test_completed(self, mock_ssh):
+        """get_status returns completed when PID is dead."""
+        mock_ssh.exec.return_value = (1, "", "")
+        with patch("rex.execution.direct.read_job_meta", return_value={"pid": 42}):
+            executor = DirectExecutor(mock_ssh)
+            status = executor.get_status("job-1")
+
+        assert status.status == "completed"
+        assert status.pid is None
+
+    def test_no_metadata(self, mock_ssh):
+        """get_status returns unknown when metadata is missing."""
+        with patch("rex.execution.direct.read_job_meta", return_value=None):
+            executor = DirectExecutor(mock_ssh)
+            status = executor.get_status("job-1")
+
+        assert status.status == "unknown"
+
+
+class TestDirectKillJob:
+    """Tests for DirectExecutor.kill_job."""
+
+    @pytest.fixture
+    def mock_ssh(self):
+        ssh = MagicMock()
+        ssh.target = "user@host"
+        return ssh
+
+    def test_sends_kill(self, mock_ssh):
+        """kill_job sends kill signal to PID."""
+        mock_ssh.exec.return_value = (0, "", "")
+        with patch("rex.execution.direct.read_job_meta", return_value={"pid": 42}):
+            executor = DirectExecutor(mock_ssh)
+            result = executor.kill_job("job-1")
+
+        assert result is True
+        mock_ssh.exec.assert_called_once_with("kill 42 2>/dev/null")
+
+    def test_missing_job(self, mock_ssh):
+        """kill_job returns False when job not found."""
+        with patch("rex.execution.direct.read_job_meta", return_value=None):
+            executor = DirectExecutor(mock_ssh)
+            result = executor.kill_job("nonexistent")
+
+        assert result is False
+
+    def test_kill_failure(self, mock_ssh):
+        """kill_job returns False when kill fails."""
+        mock_ssh.exec.return_value = (1, "", "")
+        with patch("rex.execution.direct.read_job_meta", return_value={"pid": 42}):
+            executor = DirectExecutor(mock_ssh)
+            result = executor.kill_job("job-1")
+
+        assert result is False
+
+
+class TestDirectWatchJob:
+    """Tests for DirectExecutor.watch_job."""
+
+    @pytest.fixture
+    def mock_ssh(self):
+        ssh = MagicMock()
+        ssh.target = "user@host"
+        return ssh
+
+    def test_polls_until_complete(self, mock_ssh):
+        """watch_job returns when job completes."""
+        with patch.object(DirectExecutor, "get_status") as mock_status:
+            from rex.execution.base import JobStatus
+            mock_status.side_effect = [
+                JobStatus(job_id="job-1", status="running", pid=42),
+                JobStatus(job_id="job-1", status="completed"),
+            ]
+            executor = DirectExecutor(mock_ssh)
+            result = executor.watch_job("job-1", poll_interval=0)
+
+        assert result.status == "completed"
+        assert result.exit_code == 0
+
+    def test_connection_failures(self, mock_ssh):
+        """watch_job gives up after 3 consecutive failures."""
+        with patch.object(DirectExecutor, "get_status") as mock_status:
+            from rex.execution.base import JobStatus
+            mock_status.return_value = JobStatus(job_id="job-1", status="unknown")
+            executor = DirectExecutor(mock_ssh)
+            result = executor.watch_job("job-1", poll_interval=0)
+
+        assert result.status == "unknown"
+        assert result.exit_code == 1

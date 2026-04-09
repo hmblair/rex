@@ -28,6 +28,13 @@ def quote_with_expansion(value: str) -> str:
     return shlex.quote(value)
 
 
+def build_script(ctx: "ExecutionContext", cmd: str) -> str:
+    """Build a bash script with context setup and command."""
+    context_cmds = build_context_commands(ctx)
+    prefix = "\n".join(context_cmds) + "\n" if context_cmds else ""
+    return f"#!/bin/bash -l\n{prefix}{cmd}\n"
+
+
 def build_context_commands(ctx: "ExecutionContext") -> list[str]:
     """Build shell commands for execution context setup.
 

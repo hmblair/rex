@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 import time
 from dataclasses import dataclass
 from rex.exceptions import SSHError
@@ -21,21 +20,15 @@ def _ssh_write(ssh: SSHExecutor, content: str, remote_path: str, chmod: str | No
 
     Raises SSHError on failure with user-friendly message.
     """
-    cmd = f"cat > {remote_path}"
+    cmd = f"""cat > {remote_path} << 'REXWRITE'
+{content}
+REXWRITE"""
     if chmod:
-        cmd += f" && chmod {chmod} {remote_path}"
+        cmd += f"\nchmod {chmod} {remote_path}"
 
-    try:
-        result = subprocess.run(
-            ["ssh", *ssh._opts, ssh.target, cmd],
-            input=content.encode(),
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            stderr = result.stderr.decode().strip() if result.stderr else ""
-            raise SSHError(f"Failed to write to {remote_path}: {stderr or 'SSH error'}")
-    except subprocess.CalledProcessError as e:
-        raise SSHError(f"SSH connection failed while writing to {remote_path}") from e
+    code, _, stderr = ssh.exec(cmd)
+    if code != 0:
+        raise SSHError(f"Failed to write to {remote_path}: {stderr.strip() or 'SSH error'}")
 
 
 @dataclass

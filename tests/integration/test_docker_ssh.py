@@ -191,3 +191,135 @@ class TestSpecialCharacters:
         code = executor.exec_foreground(ctx, "x=1; y=2; echo $((x+y))")
 
         assert code == 0
+
+
+class TestForegroundSemantics:
+    """Tests for foreground execution behavior."""
+
+    def test_fast_command_does_not_hang(self, ssh_server):
+        """A fast foreground command returns promptly, not hanging."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        start = time.time()
+        code = executor.exec_foreground(ctx, "echo done")
+        elapsed = time.time() - start
+
+        assert code == 0
+        assert elapsed < 5
+
+    def test_foreground_returns_nonzero_exit_code(self, ssh_server):
+        """Foreground propagates nonzero exit codes."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        code = executor.exec_foreground(ctx, "exit 3")
+
+        assert code == 3
+
+    def test_foreground_writes_log(self, ssh_server):
+        """After foreground, the log file exists and show_log works."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        executor.exec_foreground(ctx, "echo logged-output")
+
+        job_id = executor.last_job_id()
+        assert job_id is not None
+        code = executor.show_log(job_id, follow=False)
+        assert code == 0
+
+
+class TestJobLifecycle:
+    """Tests for the full detached job lifecycle."""
+
+    def test_detached_lifecycle(self, ssh_server):
+        """exec_detached -> get_status -> wait -> completed."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        job_info = executor.exec_detached(ctx, "sleep 1; echo done", job_name="lifecycle-test")
+
+        # Should be running initially
+        status = executor.get_status(job_info.job_id)
+        assert status.status in ("running", "completed")
+
+        # Wait for completion
+        time.sleep(2)
+
+        status = executor.get_status(job_info.job_id)
+        assert status.status == "completed"
+
+    def test_detached_job_appears_in_list(self, ssh_server):
+        """A detached job appears in list_jobs."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        executor.exec_detached(ctx, "sleep 2", job_name="list-test")
+
+        try:
+            jobs = executor.list_jobs()
+            job_ids = [j.job_id for j in jobs]
+            assert "list-test" in job_ids
+        finally:
+            executor.kill_job("list-test")
+
+    def test_detached_job_kill(self, ssh_server):
+        """A long-running detached job can be killed."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        executor.exec_detached(ctx, "sleep 60", job_name="kill-test")
+
+        result = executor.kill_job("kill-test")
+        assert result is True
+
+        time.sleep(0.5)
+        status = executor.get_status("kill-test")
+        assert status.status == "completed"
+
+    def test_detached_job_log(self, ssh_server):
+        """A detached job's log can be retrieved."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        executor.exec_detached(ctx, "echo log-content; sleep 0.5", job_name="log-test")
+        time.sleep(1)
+
+        code = executor.show_log("log-test", follow=False)
+        assert code == 0
+
+    def test_last_job_id(self, ssh_server):
+        """last_job_id returns the most recent job."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext()
+
+        executor.exec_detached(ctx, "echo first", job_name="first-job")
+        time.sleep(0.1)
+        executor.exec_detached(ctx, "echo second", job_name="second-job")
+
+        last = executor.last_job_id()
+        assert last == "second-job"
+
+
+class TestContextApplication:
+    """Tests that execution context is applied correctly over real SSH."""
+
+    def test_env_vars_in_foreground(self, ssh_server):
+        """Environment variables are visible to foreground commands."""
+        executor = DirectExecutor(ssh_server)
+        ctx = ExecutionContext(env={"REX_TEST_VAR": "works"})
+
+        code = executor.exec_foreground(ctx, "test \"$REX_TEST_VAR\" = works")
+        assert code == 0
+
+    def test_run_dir_in_foreground(self, ssh_server):
+        """Foreground command runs in the specified run_dir."""
+        executor = DirectExecutor(ssh_server)
+        # Use /tmp since it always exists
+        ctx = ExecutionContext(run_dir="/tmp")
+
+        code, stdout, _ = ssh_server.exec("echo placeholder")
+        # Run via foreground and check working directory
+        code = executor.exec_foreground(ctx, "test \"$(pwd)\" = /tmp")
+        assert code == 0

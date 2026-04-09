@@ -2,7 +2,8 @@
 
 import pytest
 
-from rex.execution.script import quote_with_expansion
+from rex.execution.base import ExecutionContext
+from rex.execution.script import build_script, quote_with_expansion
 
 
 class TestQuoteWithExpansion:
@@ -64,3 +65,51 @@ class TestQuoteWithExpansion:
     def test_var_with_numbers(self):
         """Numbers in variable names (not first char) are valid."""
         assert quote_with_expansion("$VAR123/path") == '"$VAR123/path"'
+
+
+class TestBuildScript:
+    """Tests for build_script helper."""
+
+    def test_includes_shebang(self):
+        """Script starts with login shell shebang."""
+        result = build_script(ExecutionContext(), "echo hello")
+        assert result.startswith("#!/bin/bash -l\n")
+
+    def test_includes_command(self):
+        """Command appears in the script."""
+        result = build_script(ExecutionContext(), "python train.py")
+        assert "python train.py" in result
+
+    def test_trailing_newline(self):
+        """Script ends with a newline."""
+        result = build_script(ExecutionContext(), "echo hello")
+        assert result.endswith("\n")
+
+    def test_empty_context(self):
+        """No context lines when context is default."""
+        result = build_script(ExecutionContext(), "echo hello")
+        assert result == "#!/bin/bash -l\necho hello\n"
+
+    def test_applies_modules(self):
+        """Modules from context appear in script."""
+        ctx = ExecutionContext(modules=["python/3.11", "cuda/12"])
+        result = build_script(ctx, "echo hello")
+        assert "module load python/3.11 cuda/12" in result
+
+    def test_applies_env(self):
+        """Environment variables are exported."""
+        ctx = ExecutionContext(env={"MY_VAR": "value"})
+        result = build_script(ctx, "echo hello")
+        assert "export MY_VAR=" in result
+
+    def test_applies_venv(self):
+        """Venv activation added when code_dir is set."""
+        ctx = ExecutionContext(code_dir="/projects/myexp")
+        result = build_script(ctx, "echo hello")
+        assert ".venv/bin/activate" in result
+
+    def test_applies_run_dir(self):
+        """cd to run_dir when set."""
+        ctx = ExecutionContext(run_dir="/scratch/runs/exp1")
+        result = build_script(ctx, "echo hello")
+        assert "/scratch/runs/exp1" in result
