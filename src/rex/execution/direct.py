@@ -82,7 +82,6 @@ chmod +x {remote_path}"""
         exit_code = self.ssh.exec_streaming(
             f"{remote_script} 2>&1 | tee {remote_log}; "
             f"_e=${{PIPESTATUS[0]}}; rm -f {remote_script}; exit $_e",
-            tty=True,
         )
 
         write_job_meta(self.ssh, job_name, remote_log)

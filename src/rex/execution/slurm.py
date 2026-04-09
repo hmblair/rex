@@ -98,7 +98,7 @@ class SlurmExecutor(BaseExecutor):
         """
         # Check for heredoc delimiter collision
         if "\nREXCMD\n" in f"\n{cmd}\n":
-            error("Command contains 'REXCMD' as a line, which conflicts with internal delimiter")
+            error("Command contains 'REXCMD' as a line, which conflicts with internal delimiter", exit_now=False)
             return 1
 
         debug(f"[slurm] exec_foreground: {cmd[:80]}{'...' if len(cmd) > 80 else ''}")

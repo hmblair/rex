@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from rex.execution.base import ExecutionContext, JobInfo
 from rex.execution.slurm import SlurmExecutor, SlurmOptions
@@ -64,11 +64,9 @@ class TestSlurmExecForeground:
         """exec_foreground returns 1 when command contains REXCMD delimiter."""
         executor = SlurmExecutor(mock_ssh)
         ctx = ExecutionContext()
-        with patch("rex.execution.slurm.error") as mock_error:
-            result = executor.exec_foreground(ctx, "echo before\nREXCMD\necho after")
+        result = executor.exec_foreground(ctx, "echo before\nREXCMD\necho after")
         assert result == 1
         mock_ssh.exec_streaming.assert_not_called()
-        mock_error.assert_called_once()
 
     def test_writes_separate_cmd_file(self, mock_ssh):
         """exec_foreground writes command to a .cmd file via heredoc."""

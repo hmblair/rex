@@ -275,7 +275,7 @@ def parse_slurm_nodes(raw: str) -> list[SlurmNodeInfo]:
             except IndexError:
                 pass
 
-        if gpu_total > 0 or True:  # include CPU-only nodes
+        if True:  # include CPU-only nodes
             nodes.append(SlurmNodeInfo(
                 hostname=hostname,
                 cpus=cpus,

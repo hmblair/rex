@@ -83,6 +83,7 @@ def list_all_jobs(
     """List jobs across all connected hosts."""
     from rex.execution import DirectExecutor, SlurmExecutor
     from rex.ssh.connection import SSHConnection
+    from rex.ssh.executor import SSHExecutor
 
     active = SSHConnection.list_active()
     if not active:
@@ -156,7 +157,6 @@ def get_status(
         print(colorize_status(status.status))
 
     return 0 if status.status == "running" else 1
-
 
 
 def kill_job(executor: Executor, job_id: str) -> int:
